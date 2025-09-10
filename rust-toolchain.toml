@@ -1,4 +1,4 @@
 [toolchain]
-channel    = "stable"
-components = [ "rust-src" ]
+channel    = "nightly"
+components = [ "miri", "rust-src" ]
 profile    = "default"
