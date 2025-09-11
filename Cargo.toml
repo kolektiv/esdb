@@ -6,8 +6,12 @@ resolver = "2"
 
 # External
 
-jiff              = { version = "0.2" }
-uuid              = { version = "1" }
+bitvec  = { version = "1" }
+fastset = { version = "0.5" }
+fjall   = { version = "2" }
+jiff    = { version = "0.2" }
+rand    = { version = "0.9" }
+uuid    = { version = "1" }
 
 # Workspace
 
