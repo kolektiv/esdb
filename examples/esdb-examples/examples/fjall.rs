@@ -101,15 +101,15 @@ pub struct Key {
     key: Vec<u8>,
 }
 
-impl From<Key> for UserKey {
-    fn from(key: Key) -> Self {
-        UserKey::from(key.key)
-    }
-}
-
 impl AsRef<[u8]> for Key {
     fn as_ref(&self) -> &[u8] {
         &self.key
+    }
+}
+
+impl From<Key> for UserKey {
+    fn from(key: Key) -> Self {
+        UserKey::from(key.key)
     }
 }
 
@@ -205,7 +205,7 @@ pub fn main() -> Result<(), Box<dyn Error>> {
 
     let type_a = KeyFactory::new(42);
 
-    // idx_types.insert(type_a.position([], 0), "")?;
+    idx_types.insert(type_a.key([], 0), "")?;
     // idx_types.insert(type_a.position([0], 0), "")?;
     // idx_types.insert(type_a.position([0, 0], 0), "")?;
     // idx_types.insert(type_a.position([0, 0], 13), "")?;
