@@ -205,7 +205,7 @@ pub fn main() -> Result<(), Box<dyn Error>> {
 
     let type_a = KeyFactory::new(42);
 
-    idx_types.insert(type_a.key([], 0), "")?;
+    // idx_types.insert(type_a.key([], 0), "")?;
     // idx_types.insert(type_a.position([0], 0), "")?;
     // idx_types.insert(type_a.position([0, 0], 0), "")?;
     // idx_types.insert(type_a.position([0, 0], 13), "")?;
