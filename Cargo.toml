@@ -10,6 +10,7 @@ bitvec  = { version = "1" }
 fastset = { version = "0.5" }
 fjall   = { version = "2" }
 jiff    = { version = "0.2" }
+musli   = { version = "0.0.149", features = ["storage"] }
 rand    = { version = "0.9" }
 rocksdb = { version = "0.24" }
 uuid    = { version = "1" }

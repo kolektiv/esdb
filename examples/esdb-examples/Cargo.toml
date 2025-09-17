@@ -2,6 +2,7 @@
 bitvec.workspace  = true
 fastset.workspace = true
 fjall.workspace   = true
+musli.workspace   = true
 rand.workspace    = true
 rocksdb.workspace = true
 
