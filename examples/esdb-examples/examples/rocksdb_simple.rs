@@ -6,16 +6,14 @@ use rocksdb::{
 };
 
 pub fn main() -> Result<(), Box<dyn Error>> {
-    {
-        let db = DB::open_default("./data/rocksdb/test")?;
-        let () = db.put(b"key_a", b"value_a")?;
+    let mut db = DB::open_default("./data/rocksdb/simple")?;
+    let () = db.create_cf("simple", &Options::default())?;
+    let cf = db.cf_handle("simple").unwrap();
 
-        let key_a = db.get(b"key_a")?;
+    let () = db.put_cf(&cf, b"key_a", b"value_a")?;
+    let key_a = db.get_cf(&cf, b"key_a")?;
 
-        println!("read key: {key_a:?}");
-    }
-
-    let () = DB::destroy(&Options::default(), "./data/rocksdb/test")?;
+    println!("read key: {key_a:?}");
 
     Ok(())
 }
