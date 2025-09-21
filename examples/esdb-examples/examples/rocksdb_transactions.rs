@@ -37,11 +37,11 @@ pub fn main() -> Result<(), Box<dyn Error>> {
     // Transactions Testing
 
     let write_options = WriteOptions::new();
-    let otxn_options = OptimisticTransactionOptions::new();
+    let opt_txn_options = OptimisticTransactionOptions::new();
 
     let start = Instant::now();
 
-    let txn_a = db.transaction_opt(&write_options, &otxn_options);
+    let txn_a = db.transaction_opt(&write_options, &opt_txn_options);
     // let txn_b = db.transaction_opt(&write_options, &otxn_options);
 
     txn_a.put_cf(&cf, "key_a", "value_a")?;
