@@ -201,6 +201,9 @@ dependencies = [
 [[package]]
 name = "esdb"
 version = "0.1.0"
+dependencies = [
+ "rocksdb",
+]
 
 [[package]]
 name = "esdb-benches"
