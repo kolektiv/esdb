@@ -11,6 +11,7 @@ use rocksdb::{
     MultiThreaded,
     OptimisticTransactionDB,
     Options,
+    WaitForCompactOptions,
 };
 
 const EVENTS_CF_NAME: &str = "events";
@@ -56,6 +57,19 @@ impl AsMut<OptimisticTransactionDB<MultiThreaded>> for EventStream {
     }
 }
 
+impl Drop for EventStream {
+    fn drop(&mut self) {
+        let mut options = WaitForCompactOptions::default();
+        options.set_abort_on_pause(true);
+        options.set_flush(true);
+        options.set_timeout(0);
+
+        self.opt_txn_db
+            .wait_for_compact(&options)
+            .expect("failed to compact on drop");
+    }
+}
+
 impl EventStream {
     /// Returns the is empty of this [`EventStream`].
     ///
@@ -97,25 +111,26 @@ impl EventStream {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::LazyLock;
+
+    use serial_test::serial;
 
     use crate::EventStream;
 
-    static TEST_EVENT_STREAM: LazyLock<EventStream> = LazyLock::new(|| {
-        EventStream::new("./data/test/new_event_stream").expect("event stream could not be created")
-    });
-
     #[test]
+    #[serial]
     fn new_event_stream_is_empty() {
-        // let event_stream = TEST_EVENT_STREAM;
+        let event_stream = EventStream::new("./data/test/new_event_stream")
+            .expect("event stream could not be created");
 
-        assert!(TEST_EVENT_STREAM.is_empty());
+        assert!(event_stream.is_empty());
     }
 
     #[test]
+    #[serial]
     fn new_event_stream_len_is_zero() {
-        // let event_stream = TEST_EVENT_STREAM;
+        let event_stream = EventStream::new("./data/test/new_event_stream")
+            .expect("event stream could not be created");
 
-        assert_eq!(0, TEST_EVENT_STREAM.len());
+        assert_eq!(0, event_stream.len());
     }
 }

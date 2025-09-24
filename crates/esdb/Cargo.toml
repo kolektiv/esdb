@@ -1,5 +1,6 @@
 [dependencies]
-rocksdb.workspace = true
+rocksdb.workspace     = true
+serial_test.workspace = true
 
 [lints]
 workspace = true
