@@ -119,7 +119,7 @@ mod tests {
     #[test]
     #[serial]
     fn new_event_stream_is_empty() {
-        let event_stream = EventStream::new("./data/test/new_event_stream")
+        let event_stream = EventStream::new("../../data/test/new_event_stream")
             .expect("event stream could not be created");
 
         assert!(event_stream.is_empty());
@@ -128,7 +128,7 @@ mod tests {
     #[test]
     #[serial]
     fn new_event_stream_len_is_zero() {
-        let event_stream = EventStream::new("./data/test/new_event_stream")
+        let event_stream = EventStream::new("../../data/test/new_event_stream")
             .expect("event stream could not be created");
 
         assert_eq!(0, event_stream.len());
