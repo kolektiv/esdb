@@ -1,5 +1,6 @@
 [dependencies]
-rocksdb.workspace     = true
+derive_more.workspace = true
+fjall.workspace       = true
 serial_test.workspace = true
 
 [lints]
