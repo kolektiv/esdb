@@ -6,17 +6,16 @@ resolver = "2"
 
 # External
 
-bitvec      = { version = "1" }
+bytes       = { version = "1" }
 derive_more = { version = "2", features = ["full"] }
-fastset     = { version = "0.5" }
 fjall       = { version = "2" }
 jiff        = { version = "0.2" }
+multimap    = { version = "0.10" }
 musli       = { version = "0.0.149", features = ["storage"] }
 rand        = { version = "0.9" }
 rapidhash   = { version = "4" }
 rocksdb     = { version = "0.24" }
 serial_test = { version = "3" }
-uuid        = { version = "1" }
 
 # Workspace
 

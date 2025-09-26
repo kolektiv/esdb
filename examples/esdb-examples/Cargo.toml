@@ -1,7 +1,6 @@
 [dependencies]
-bitvec.workspace    = true
+bytes.workspace     = true
 esdb.workspace      = true
-fastset.workspace   = true
 fjall.workspace     = true
 musli.workspace     = true
 rand.workspace      = true

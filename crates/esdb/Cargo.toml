@@ -1,6 +1,8 @@
 [dependencies]
 derive_more.workspace = true
 fjall.workspace       = true
+multimap.workspace    = true
+rapidhash.workspace   = true
 serial_test.workspace = true
 
 [lints]
