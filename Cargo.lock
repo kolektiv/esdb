@@ -227,6 +227,7 @@ dependencies = [
 name = "esdb"
 version = "0.1.0"
 dependencies = [
+ "bytes",
  "derive_more",
  "fjall",
  "multimap",

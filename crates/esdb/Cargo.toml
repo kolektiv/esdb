@@ -1,4 +1,5 @@
 [dependencies]
+bytes.workspace       = true
 derive_more.workspace = true
 fjall.workspace       = true
 multimap.workspace    = true

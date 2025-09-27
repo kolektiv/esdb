@@ -1,30 +1,38 @@
 use std::error::Error;
 
-use esdb::{
-    stream::Stream,
-    // tags::SecondaryTag,
-    // value_tag,
+use esdb::stream::Stream;
+use fjall::{
+    Config,
+    PartitionCreateOptions,
 };
 
-pub fn main() -> Result<(), Box<dyn Error>> {
-    let mut stream = Stream::new("./data/esdb/experiments")?;
+static PATH: &str = "./data/esdb/experiments";
 
-    stream.append("hello world!".as_bytes(), 234u64.to_be_bytes())?;
-    stream.append("oh, something else!".as_bytes(), 67u64.to_be_bytes())?;
-    stream.append("goodbye cruel world...".as_bytes(), 234u64.to_be_bytes())?;
+pub fn main() -> Result<(), Box<dyn Error>> {
+    {
+        let mut stream = Stream::new(PATH)?;
+
+        stream.append(&[
+            ("hello world!".as_bytes(), 234u64.to_be_bytes()),
+            ("oh, something else!".as_bytes(), 67u64.to_be_bytes()),
+            ("goodbye cruel world...".as_bytes(), 234u64.to_be_bytes()),
+        ])?;
+    }
+
+    let keyspace = Config::new(PATH).open()?;
+
+    for partition in keyspace.list_partitions() {
+        let partition_options = PartitionCreateOptions::default();
+        let partition = keyspace.open_partition(&partition, partition_options)?;
+
+        println!("Partition: {}", partition.name);
+
+        for kv in partition.iter() {
+            let (k, v) = kv?;
+
+            println!("{k:?}: {v:?}");
+        }
+    }
 
     Ok(())
 }
-
-// value_tag!(Email, "email");
-// value_tag!(StudentId, "student_id");
-
-// pub fn test(tags: &[&dyn SecondaryTag]) {
-//     for t in tags {
-//         t.to_string();
-//     }
-// }
-
-// pub fn test_2() {
-//     test(&[&Email::from("a"), &StudentId::from("b")]);
-// }
