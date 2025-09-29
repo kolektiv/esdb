@@ -47,7 +47,7 @@ impl Events {
 }
 
 impl Append for Events {
-    fn append(&self, batch: &mut Batch, event: &(&[u8], [u8; 8]), index: [u8; 8]) {
-        batch.insert(&self.events, index, event.0);
+    fn append(&self, batch: &mut Batch, event: &(&[u8], u64), position: u64) {
+        batch.insert(&self.events, position.to_be_bytes(), event.0);
     }
 }

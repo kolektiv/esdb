@@ -7,6 +7,7 @@ resolver = "2"
 # External
 
 bytes       = { version = "1" }
+deku        = { version = "0.19", features = ["std"], default-features = false }
 derive_more = { version = "2", features = ["full"] }
 fjall       = { version = "2" }
 jiff        = { version = "0.2" }

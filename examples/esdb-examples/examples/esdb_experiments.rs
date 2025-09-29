@@ -13,9 +13,9 @@ pub fn main() -> Result<(), Box<dyn Error>> {
         let mut stream = Stream::new(PATH)?;
 
         stream.append(&[
-            ("hello world!".as_bytes(), 234u64.to_be_bytes()),
-            ("oh, something else!".as_bytes(), 67u64.to_be_bytes()),
-            ("goodbye cruel world...".as_bytes(), 234u64.to_be_bytes()),
+            ("hello world!".as_bytes(), 234),
+            ("oh, something else!".as_bytes(), 67),
+            ("goodbye cruel world...".as_bytes(), 234),
         ])?;
     }
 

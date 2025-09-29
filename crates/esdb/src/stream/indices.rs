@@ -33,7 +33,7 @@ impl Indices {
 }
 
 impl Append for Indices {
-    fn append(&self, batch: &mut Batch, event: &(&[u8], [u8; 8]), index: [u8; 8]) {
-        self.typed.append(batch, event, index);
+    fn append(&self, batch: &mut Batch, event: &(&[u8], u64), position: u64) {
+        self.typed.append(batch, event, position);
     }
 }

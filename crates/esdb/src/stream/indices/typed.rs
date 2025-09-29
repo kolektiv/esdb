@@ -25,7 +25,7 @@ impl Typed {
 }
 
 impl Append for Typed {
-    fn append(&self, batch: &mut Batch, event: &(&[u8], [u8; 8]), index: [u8; 8]) {
-        self.ordinal.append(batch, event, index);
+    fn append(&self, batch: &mut Batch, event: &(&[u8], u64), position: u64) {
+        self.ordinal.append(batch, event, position);
     }
 }

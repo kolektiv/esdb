@@ -23,7 +23,7 @@ use crate::stream::{
 // =================================================================================================
 
 trait Append {
-    fn append(&self, batch: &mut Batch, event: &(&[u8], [u8; 8]), index: [u8; 8]);
+    fn append(&self, batch: &mut Batch, event: &(&[u8], u64), position: u64);
 }
 
 #[derive(Debug)]
@@ -54,14 +54,14 @@ impl Stream {
 }
 
 impl Stream {
-    pub fn append(&mut self, events: &[(&[u8], [u8; 8])]) -> Result<(), Box<dyn Error>> {
+    pub fn append(&mut self, events: &[(&[u8], u64)]) -> Result<(), Box<dyn Error>> {
         let mut batch = self.data.batch();
 
         for event in events {
-            let index = self.state.bytes();
+            let position = self.state.current();
 
-            self.events.append(&mut batch, event, index);
-            self.indices.append(&mut batch, event, index);
+            self.events.append(&mut batch, event, position);
+            self.indices.append(&mut batch, event, position);
             self.state.increment();
         }
 
