@@ -28,7 +28,14 @@ impl Data {
 }
 
 impl Data {
+    #[must_use]
     pub fn batch(&self) -> Batch {
         self.keyspace.batch()
+    }
+}
+
+impl AsRef<Keyspace> for Data {
+    fn as_ref(&self) -> &Keyspace {
+        &self.keyspace
     }
 }

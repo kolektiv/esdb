@@ -3,5 +3,6 @@
 #![allow(clippy::missing_panics_doc)]
 #![feature(slice_as_array)]
 
+pub mod data;
 pub mod stream;
 pub mod tags;

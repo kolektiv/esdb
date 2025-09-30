@@ -1,4 +1,4 @@
-mod typed;
+mod types;
 
 use std::error::Error;
 
@@ -8,17 +8,25 @@ use fjall::{
     PartitionCreateOptions,
 };
 
-use crate::stream::{
-    Append,
+use crate::{
     data::Data,
-    indices::typed::Typed,
+    stream::indices::types::Types,
 };
+
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub struct HashedTypeSpecifier(u64, u8);
+
+impl From<(u64, u8)> for HashedTypeSpecifier {
+    fn from(value: (u64, u8)) -> Self {
+        Self(value.0, value.1)
+    }
+}
 
 static INDICES: &str = "indices";
 
 #[derive(Debug)]
 pub struct Indices {
-    typed: Typed,
+    types: Types,
 }
 
 impl Indices {
@@ -26,14 +34,14 @@ impl Indices {
         let indices_options = PartitionCreateOptions::default();
         let indices = data.keyspace.open_partition(INDICES, indices_options)?;
 
-        let typed = Typed::new(&indices);
+        let types = Types::new(&indices);
 
-        Ok(Self { typed })
+        Ok(Self { types })
     }
 }
 
-impl Append for Indices {
-    fn append(&self, batch: &mut Batch, event: &(&[u8], u64), position: u64) {
-        self.typed.append(batch, event, position);
+impl Indices {
+    pub fn insert(&self, batch: &mut Batch, type_specifier: &HashedTypeSpecifier, position: u64) {
+        self.types.insert(batch, type_specifier, position);
     }
 }

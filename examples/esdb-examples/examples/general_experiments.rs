@@ -1,35 +1,64 @@
 use std::error::Error;
 
 use bytes::{
-    Buf,
     BufMut as _,
     BytesMut,
 };
-use fjall::{
-    Config,
-    PartitionCreateOptions,
-};
-
-static PATH: &str = "./data/esdb/experiments";
 
 pub fn main() -> Result<(), Box<dyn Error>> {
-    let keyspace = Config::new(PATH).open()?;
-    let partition = keyspace.open_partition("indices", PartitionCreateOptions::default())?;
+    let mut keys = Vec::new();
+    let mut key = BytesMut::with_capacity(18);
 
-    let mut key = BytesMut::with_capacity(9);
+    key.put_u8(0);
+    key.put_u64(0);
+    key.put_u8(0);
     key.put_u64(234);
-    key.put_u8(0u8);
 
-    let iterator_a = partition.prefix(&key[..]).map(|kv| {
-        let mut k = &kv.expect("iteration error: key/value").0[..];
+    keys.push(key.to_vec());
 
-        k.advance(9);
-        k.get_u64()
-    });
+    key.clear();
+    key.put_u8(0);
+    key.put_u64(1);
+    key.put_u8(2);
+    key.put_u64(234);
 
-    for pos in iterator_a {
-        println!("pos: {pos:?}");
-    }
+    keys.push(key.to_vec());
+
+    key.clear();
+    key.put_u8(0);
+    key.put_u64(2);
+    key.put_u8(1);
+    key.put_u64(234);
+
+    keys.push(key.to_vec());
+
+    println!("keys: {keys:?}");
+
+    keys.sort_unstable();
+
+    println!("keys sorted: {keys:?}");
+
+    key.clear();
+    key.put_u8(0);
+    key.put_u64(0);
+    key.put_u8(0);
+    key.put_u64(234);
+
+    let lower = key.to_vec();
+
+    key.clear();
+    key.put_u8(0);
+    key.put_u64(u64::MAX);
+    key.put_u8(1);
+    key.put_u64(234);
+
+    let upper = key.to_vec();
+
+    let range = lower..upper;
+
+    keys.iter()
+        .filter(|k| range.contains(*k))
+        .for_each(|k| println!("k: {k:?}"));
 
     Ok(())
 }

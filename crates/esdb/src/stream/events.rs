@@ -8,12 +8,13 @@ use fjall::{
     PartitionHandle,
 };
 
-use crate::stream::{
-    Append,
-    data::Data,
-};
+use crate::data::Data;
 
 static EVENTS: &str = "events";
+
+pub trait Write {
+    fn write(&self, batch: &mut Batch, event: &[u8], position: u64);
+}
 
 #[derive(Debug)]
 pub struct Events {
@@ -46,8 +47,8 @@ impl Events {
     }
 }
 
-impl Append for Events {
-    fn append(&self, batch: &mut Batch, event: &(&[u8], u64), position: u64) {
-        batch.insert(&self.events, position.to_be_bytes(), event.0);
+impl Write for Events {
+    fn write(&self, batch: &mut Batch, event: &[u8], position: u64) {
+        batch.insert(&self.events, position.to_be_bytes(), event);
     }
 }

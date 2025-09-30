@@ -1,51 +1,48 @@
-mod data;
 mod events;
 mod indices;
 mod state;
 
-use std::{
-    error::Error,
-    path::Path,
-};
+use std::error::Error;
 
 use derive_more::Debug;
 use fjall::Batch;
 
-use crate::stream::{
+use crate::{
     data::Data,
-    events::Events,
-    indices::Indices,
-    state::State,
+    stream::{
+        events::{
+            Events,
+            Write as _,
+        },
+        indices::{
+            HashedTypeSpecifier,
+            Indices,
+        },
+        state::State,
+    },
 };
 
 // =================================================================================================
 // Stream
 // =================================================================================================
 
-trait Append {
-    fn append(&self, batch: &mut Batch, event: &(&[u8], u64), position: u64);
-}
+// TODO: State moves out of stream, and up one level when we combine stream and
+// meta
 
 #[derive(Debug)]
 pub struct Stream {
-    data: Data,
     events: Events,
     indices: Indices,
     state: State,
 }
 
 impl Stream {
-    pub fn new<P>(path: P) -> Result<Self, Box<dyn Error>>
-    where
-        P: AsRef<Path>,
-    {
-        let data = Data::new(path)?;
-        let events = Events::new(&data)?;
-        let indices = Indices::new(&data)?;
+    pub fn new(data: &Data) -> Result<Self, Box<dyn Error>> {
+        let events = Events::new(data)?;
+        let indices = Indices::new(data)?;
         let state = State::new(&events)?;
 
         Ok(Self {
-            data,
             events,
             indices,
             state,
@@ -54,18 +51,18 @@ impl Stream {
 }
 
 impl Stream {
-    pub fn append(&mut self, events: &[(&[u8], u64)]) -> Result<(), Box<dyn Error>> {
-        let mut batch = self.data.batch();
-
+    pub fn append(
+        &mut self,
+        batch: &mut Batch,
+        events: &[(&[u8], &[u64], HashedTypeSpecifier)],
+    ) -> Result<(), Box<dyn Error>> {
         for event in events {
             let position = self.state.current();
 
-            self.events.append(&mut batch, event, position);
-            self.indices.append(&mut batch, event, position);
+            self.events.write(batch, event.0, position);
+            self.indices.insert(batch, &event.2, position);
             self.state.increment();
         }
-
-        batch.commit()?;
 
         Ok(())
     }
