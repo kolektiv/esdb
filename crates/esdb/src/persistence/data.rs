@@ -1,6 +1,9 @@
 use std::error::Error;
 
-use bytes::Buf;
+use bytes::{
+    Buf,
+    BufMut,
+};
 use derive_more::Debug;
 use fjall::{
     Batch,
@@ -11,7 +14,10 @@ use fjall::{
 
 use crate::{
     model::Position,
-    persistence::HashedEvent,
+    persistence::{
+        HashedEvent,
+        POSITION_LEN,
+    },
 };
 
 // =================================================================================================
@@ -60,6 +66,25 @@ impl Data {
 
 impl Data {
     pub fn insert(&self, batch: &mut Batch, position: Position, event: &HashedEvent) {
-        batch.insert(&self.data, position.value().to_be_bytes(), &event.data);
+        let mut key = [0u8; POSITION_LEN];
+        let mut value = Vec::new();
+
+        {
+            let mut key = &mut key[..];
+
+            key.put_u64(position.value());
+
+            value.put_u64(event.descriptor.hash());
+            value.put_u8(event.descriptor.as_ref().version().value());
+            value.put_u8(u8::try_from(event.tags.len()).expect("invalid tag count"));
+
+            for tag in &event.tags {
+                value.put_u64(tag.hash());
+            }
+
+            value.put_slice(&event.data);
+        }
+
+        batch.insert(&self.data, key, value);
     }
 }

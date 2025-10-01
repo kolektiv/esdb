@@ -7,7 +7,6 @@ use std::{
     path::Path,
 };
 
-use bytes::BufMut;
 use derive_more::Debug;
 use fjall::{
     Batch,
@@ -39,6 +38,8 @@ use crate::{
 // =================================================================================================
 
 // Configuration
+
+static POSITION_LEN: usize = size_of::<u64>();
 
 static SEED: RapidSecrets = RapidSecrets::seed(0x2811_2017);
 
@@ -161,64 +162,42 @@ impl From<Event> for HashedEvent {
 // Descriptor
 
 #[derive(Clone, Debug)]
-pub struct HashedDescriptor(HashedDescriptorIdentifier, Descriptor);
+pub struct HashedDescriptor(u64, Descriptor);
 
 impl HashedDescriptor {
-    pub fn hashed(&self) -> &HashedDescriptorIdentifier {
-        &self.0
+    pub fn hash(&self) -> u64 {
+        self.0
     }
+}
 
-    pub fn inner(&self) -> &Descriptor {
+impl AsRef<Descriptor> for HashedDescriptor {
+    fn as_ref(&self) -> &Descriptor {
         &self.1
     }
 }
 
 impl From<Descriptor> for HashedDescriptor {
     fn from(value: Descriptor) -> Self {
-        let mut bytes = Vec::new();
+        let bytes = value.identifier().value().as_bytes();
+        let hash = v3::rapidhash_v3_seeded(bytes, &SEED);
 
-        {
-            bytes.put_slice(value.identifier().value().as_bytes());
-            bytes.put_u8(value.version().value());
-        }
-
-        let identifier = v3::rapidhash_v3_seeded(&bytes, &SEED).into();
-
-        Self(identifier, value)
-    }
-}
-
-// Identifier
-
-#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub struct HashedDescriptorIdentifier(u64);
-
-impl HashedDescriptorIdentifier {
-    pub fn value(self) -> u64 {
-        self.0
-    }
-}
-
-impl<T> From<T> for HashedDescriptorIdentifier
-where
-    T: Into<u64>,
-{
-    fn from(value: T) -> Self {
-        Self(value.into())
+        Self(hash, value)
     }
 }
 
 // Specifier
 
 #[derive(Clone, Debug)]
-pub struct HashedDescriptorSpecifier(HashedDescriptorIdentifier, DescriptorSpecifier);
+pub struct HashedDescriptorSpecifier(u64, DescriptorSpecifier);
 
 impl HashedDescriptorSpecifier {
-    pub fn hashed(&self) -> &HashedDescriptorIdentifier {
-        &self.0
+    pub fn hash(&self) -> u64 {
+        self.0
     }
+}
 
-    pub fn inner(&self) -> &DescriptorSpecifier {
+impl AsRef<DescriptorSpecifier> for HashedDescriptorSpecifier {
+    fn as_ref(&self) -> &DescriptorSpecifier {
         &self.1
     }
 }
@@ -226,9 +205,9 @@ impl HashedDescriptorSpecifier {
 impl From<DescriptorSpecifier> for HashedDescriptorSpecifier {
     fn from(value: DescriptorSpecifier) -> Self {
         let bytes = value.identifier().value().as_bytes();
-        let identifier = v3::rapidhash_v3_seeded(bytes, &SEED).into();
+        let hash = v3::rapidhash_v3_seeded(bytes, &SEED);
 
-        Self(identifier, value)
+        Self(hash, value)
     }
 }
 
@@ -242,11 +221,13 @@ impl From<DescriptorSpecifier> for HashedDescriptorSpecifier {
 pub struct HashedTag(u64, Tag);
 
 impl HashedTag {
-    pub fn hashed(&self) -> u64 {
+    pub fn hash(&self) -> u64 {
         self.0
     }
+}
 
-    pub fn inner(&self) -> &Tag {
+impl AsRef<Tag> for HashedTag {
+    fn as_ref(&self) -> &Tag {
         &self.1
     }
 }

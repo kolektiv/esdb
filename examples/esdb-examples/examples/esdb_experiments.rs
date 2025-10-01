@@ -14,17 +14,16 @@ pub fn main() -> Result<(), Box<dyn Error>> {
         let mut stream = Stream::new(PATH)?;
 
         stream.append(vec![
-            Event::new("hello world!", ("type:a", 0), vec![
-                "tag:a".into(),
-                "tag:b".into(),
+            Event::new("hello world!", ("StudentSubscribedToCourse", 0), vec![
+                "student:3242".into(),
+                "course:523".into(),
             ]),
-            Event::new("oh, no!", ("type:b", 0), vec![
-                "tag:a".into(),
-                "tag:c".into(),
+            Event::new("oh, no!", ("CourseCapacityChanged", 0), vec![
+                "course:523".into(),
             ]),
-            Event::new("goodbye world...", ("type:a", 1), vec![
-                "tag:a".into(),
-                "tag:d".into(),
+            Event::new("goodbye world...", ("StudentSubscribedToCourse", 1), vec![
+                "student:7642".into(),
+                "course:63".into(),
             ]),
         ])?;
     }

@@ -19,6 +19,7 @@ use crate::{
         HashedDescriptorSpecifier,
         HashedEvent,
         HashedTag,
+        POSITION_LEN,
     },
 };
 
@@ -30,7 +31,6 @@ use crate::{
 
 static INDEX_PARTITION_NAME: &str = "index";
 
-static POSITION_LEN: usize = size_of::<u64>();
 static PREFIX_LEN: usize = size_of::<u8>();
 
 // -------------------------------------------------------------------------------------------------
@@ -131,12 +131,12 @@ impl DescriptorForwardIndex {
             let mut key = &mut key[..];
 
             key.put_u8(DESCRIPTOR_FORWARD_INDEX_KEY);
-            key.put_u64(descriptor.hashed().value());
+            key.put_u64(descriptor.hash());
             key.put_u64(position.value());
 
             let mut value = &mut value[..];
 
-            value.put_u8(descriptor.inner().version().value());
+            value.put_u8(descriptor.as_ref().version().value());
         }
 
         batch.insert(&self.index, key, value);
@@ -168,7 +168,7 @@ impl IntoIterator for DescriptorForwardIndexView {
     type Item = u64;
 
     fn into_iter(self) -> Self::IntoIter {
-        let type_id = self.specifier.hashed().value();
+        let hash = self.specifier.hash();
 
         let mut prefix = [0u8; DESCRIPTOR_PREFIX_LEN];
 
@@ -176,12 +176,12 @@ impl IntoIterator for DescriptorForwardIndexView {
             let mut prefix = &mut prefix[..];
 
             prefix.put_u8(DESCRIPTOR_FORWARD_INDEX_KEY);
-            prefix.put_u64(type_id);
+            prefix.put_u64(hash);
         }
 
         let version_bounds = self
             .specifier
-            .inner()
+            .as_ref()
             .range()
             .as_ref()
             .map_or((u8::MIN, u8::MAX), |r| (r.start.value(), r.end.value()));
@@ -303,7 +303,7 @@ impl TagForwardIndex {
                 let mut key = &mut key[..];
 
                 key.put_u8(TAG_FORWARD_INDEX_KEY);
-                key.put_u64(tag.hashed());
+                key.put_u64(tag.hash());
                 key.put_u64(position.value());
             }
 

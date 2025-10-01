@@ -121,10 +121,9 @@ impl DescriptorLookupReference {
             let mut key = &mut key[..];
 
             key.put_u8(DESCRIPTOR_LOOKUP_REFERENCE_KEY);
-            key.put_u64(descriptor.hashed().value());
+            key.put_u64(descriptor.hash());
 
-            value.put_u8(descriptor.inner().version().value());
-            value.put_slice(descriptor.inner().identifier().value().as_bytes());
+            value.put_slice(descriptor.as_ref().identifier().value().as_bytes());
         }
 
         batch.insert(&self.reference, key, value);
@@ -194,10 +193,10 @@ impl TagLookupReference {
                 let mut key = &mut key[..];
 
                 key.put_u8(TAG_LOOKUP_REFERENCE_KEY);
-                key.put_u64(tag.hashed());
+                key.put_u64(tag.hash());
             }
 
-            let value = tag.inner().value().as_bytes();
+            let value = tag.as_ref().value().as_bytes();
 
             batch.insert(&self.reference, key, value);
         }
