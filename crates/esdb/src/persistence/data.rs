@@ -9,7 +9,10 @@ use fjall::{
     PartitionHandle,
 };
 
-use crate::model::Position;
+use crate::{
+    model::Position,
+    persistence::HashedEvent,
+};
 
 // =================================================================================================
 // Data
@@ -56,7 +59,7 @@ impl Data {
 }
 
 impl Data {
-    pub fn insert(&self, batch: &mut Batch, event: &[u8], position: Position) {
-        batch.insert(&self.data, position.value().to_be_bytes(), event);
+    pub fn insert(&self, batch: &mut Batch, position: Position, event: &HashedEvent) {
+        batch.insert(&self.data, position.value().to_be_bytes(), &event.data);
     }
 }

@@ -6,6 +6,9 @@ mod model;
 mod persistence;
 
 pub use self::{
-    model::Stream,
-    persistence::Store,
+    model::{
+        Event,
+        Stream,
+    },
+    persistence::Database,
 };

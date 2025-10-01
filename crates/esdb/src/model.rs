@@ -1,62 +1,89 @@
 use std::{
     error::Error,
     ops::Range,
+    path::Path,
 };
 
 use derive_more::Debug;
-use fjall::Batch;
 
 use crate::persistence::{
+    Database,
     Store,
     data::Data,
-    index::Index,
 };
 
 // =================================================================================================
 // Model
 // =================================================================================================
 
+// Event
+
+#[derive(Debug)]
+pub struct Event {
+    pub data: Vec<u8>,
+    pub descriptor: Descriptor,
+    pub tags: Vec<Tag>,
+}
+
+impl Event {
+    pub fn new(
+        data: impl Into<Vec<u8>>,
+        descriptor: impl Into<Descriptor>,
+        tags: impl Into<Vec<Tag>>,
+    ) -> Self {
+        let data = data.into();
+        let descriptor = descriptor.into();
+        let tags = tags.into();
+
+        Self {
+            data,
+            descriptor,
+            tags,
+        }
+    }
+}
+
+// -------------------------------------------------------------------------------------------------
+
 // Stream
 
 #[derive(Debug)]
 pub struct Stream {
-    data: Data,
-    index: Index,
+    database: Database,
     position: Position,
+    store: Store,
 }
 
 impl Stream {
-    pub fn new(store: &Store) -> Result<Self, Box<dyn Error>> {
-        let data = Data::new(store.as_ref())?;
-        let index = Index::new(store.as_ref())?;
-
-        let len = data.len()?;
-        let position = len.into();
+    pub fn new<P>(path: P) -> Result<Self, Box<dyn Error>>
+    where
+        P: AsRef<Path>,
+    {
+        let database = Database::new(path)?;
+        let store = Store::new(&database)?;
+        let position = AsRef::<Data>::as_ref(&store).len().map(Into::into)?;
 
         Ok(Self {
-            data,
-            index,
+            database,
             position,
+            store,
         })
     }
 }
 
 impl Stream {
-    pub fn append(
-        &mut self,
-        batch: &mut Batch,
-        events: impl IntoIterator<Item = (Vec<u8>, Descriptor, Vec<Tag>)>,
-    ) -> Result<(), Box<dyn Error>> {
+    pub fn append<E>(&mut self, events: E) -> Result<(), Box<dyn Error>>
+    where
+        E: IntoIterator<Item = Event>,
+    {
+        let mut batch = self.database.batch();
+
         for event in events {
-            let pos = self.position;
-
-            let descriptor = event.1.into();
-            let tags = event.2.into_iter().map(Into::into).collect::<Vec<_>>();
-
-            self.data.insert(batch, &event.0[..], pos);
-            self.index.insert(batch, &descriptor, &tags, pos);
+            self.store.insert(&mut batch, self.position, event);
             self.position.increment();
         }
+
+        batch.commit()?;
 
         Ok(())
     }
@@ -64,11 +91,11 @@ impl Stream {
 
 impl Stream {
     pub fn is_empty(&self) -> Result<bool, Box<dyn Error>> {
-        self.data.is_empty()
+        AsRef::<Data>::as_ref(&self.store).is_empty()
     }
 
     pub fn len(&self) -> Result<u64, Box<dyn Error>> {
-        self.data.len()
+        AsRef::<Data>::as_ref(&self.store).len()
     }
 }
 

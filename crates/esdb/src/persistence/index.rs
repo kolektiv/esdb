@@ -17,6 +17,7 @@ use crate::{
     persistence::{
         HashedDescriptor,
         HashedDescriptorSpecifier,
+        HashedEvent,
         HashedTag,
     },
 };
@@ -56,15 +57,9 @@ impl Index {
 }
 
 impl Index {
-    pub fn insert(
-        &self,
-        batch: &mut Batch,
-        descriptor: &HashedDescriptor,
-        tags: &[HashedTag],
-        position: Position,
-    ) {
-        self.descriptor.insert(batch, descriptor, position);
-        self.tag.insert(batch, tags, position);
+    pub fn insert(&self, batch: &mut Batch, position: Position, event: &HashedEvent) {
+        self.descriptor.insert(batch, position, &event.descriptor);
+        self.tag.insert(batch, position, &event.tags);
     }
 }
 
@@ -96,8 +91,8 @@ impl DescriptorIndex {
 }
 
 impl DescriptorIndex {
-    pub fn insert(&self, batch: &mut Batch, type_value: &HashedDescriptor, position: Position) {
-        self.forward.insert(batch, type_value, position);
+    pub fn insert(&self, batch: &mut Batch, position: Position, descriptor: &HashedDescriptor) {
+        self.forward.insert(batch, position, descriptor);
     }
 }
 
@@ -128,7 +123,7 @@ impl DescriptorForwardIndex {
 }
 
 impl DescriptorForwardIndex {
-    pub fn insert(&self, batch: &mut Batch, descriptor: &HashedDescriptor, position: Position) {
+    pub fn insert(&self, batch: &mut Batch, position: Position, descriptor: &HashedDescriptor) {
         let mut key = [0u8; DESCRIPTOR_KEY_LEN];
         let mut value = [0u8; DESCRIPTOR_VALUE_LEN];
 
@@ -169,7 +164,7 @@ impl DescriptorForwardIndexView {
 }
 
 impl IntoIterator for DescriptorForwardIndexView {
-    type IntoIter = DescriptorIndexForwardIterator;
+    type IntoIter = DescriptorForwardIndexIterator;
     type Item = u64;
 
     fn into_iter(self) -> Self::IntoIter {
@@ -217,25 +212,25 @@ impl IntoIterator for DescriptorForwardIndexView {
             Some(position)
         }));
 
-        DescriptorIndexForwardIterator::new(iterator)
+        DescriptorForwardIndexIterator::new(iterator)
     }
 }
 
 // Iterator
 
 #[derive(Debug)]
-pub struct DescriptorIndexForwardIterator {
+pub struct DescriptorForwardIndexIterator {
     #[debug(skip)]
     iterator: Box<dyn Iterator<Item = u64>>,
 }
 
-impl DescriptorIndexForwardIterator {
+impl DescriptorForwardIndexIterator {
     fn new(iterator: Box<dyn Iterator<Item = u64>>) -> Self {
         Self { iterator }
     }
 }
 
-impl Iterator for DescriptorIndexForwardIterator {
+impl Iterator for DescriptorForwardIndexIterator {
     type Item = u64;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -270,8 +265,8 @@ impl TagIndex {
 }
 
 impl TagIndex {
-    pub fn insert(&self, batch: &mut Batch, tags: &[HashedTag], position: Position) {
-        self.forward.insert(batch, tags, position);
+    pub fn insert(&self, batch: &mut Batch, position: Position, tags: &[HashedTag]) {
+        self.forward.insert(batch, position, tags);
     }
 }
 
@@ -300,7 +295,7 @@ impl TagForwardIndex {
 }
 
 impl TagForwardIndex {
-    pub fn insert(&self, batch: &mut Batch, tags: &[HashedTag], position: Position) {
+    pub fn insert(&self, batch: &mut Batch, position: Position, tags: &[HashedTag]) {
         let mut key = [0u8; TAG_KEY_LEN];
 
         for tag in tags {

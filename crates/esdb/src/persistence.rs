@@ -1,11 +1,13 @@
 pub mod data;
 pub mod index;
+pub mod reference;
 
 use std::{
     error::Error,
     path::Path,
 };
 
+use bytes::BufMut;
 use derive_more::Debug;
 use fjall::{
     Batch,
@@ -17,10 +19,19 @@ use rapidhash::v3::{
     RapidSecrets,
 };
 
-use crate::model::{
-    Descriptor,
-    DescriptorSpecifier,
-    Tag,
+use crate::{
+    model::{
+        Descriptor,
+        DescriptorSpecifier,
+        Event,
+        Position,
+        Tag,
+    },
+    persistence::{
+        data::Data,
+        index::Index,
+        reference::Reference,
+    },
 };
 
 // =================================================================================================
@@ -33,15 +44,15 @@ static SEED: RapidSecrets = RapidSecrets::seed(0x2811_2017);
 
 // -------------------------------------------------------------------------------------------------
 
-// Store
+// Database
 
 #[derive(Debug)]
-pub struct Store {
+pub struct Database {
     #[debug("Keyspace")]
     keyspace: Keyspace,
 }
 
-impl Store {
+impl Database {
     pub fn new<P>(path: P) -> Result<Self, Box<dyn Error>>
     where
         P: AsRef<Path>,
@@ -52,16 +63,94 @@ impl Store {
     }
 }
 
-impl Store {
+impl Database {
     #[must_use]
     pub fn batch(&self) -> Batch {
         self.keyspace.batch()
     }
 }
 
-impl AsRef<Keyspace> for Store {
+impl AsRef<Keyspace> for Database {
     fn as_ref(&self) -> &Keyspace {
         &self.keyspace
+    }
+}
+
+// -------------------------------------------------------------------------------------------------
+
+// Store
+
+#[derive(Debug)]
+pub struct Store {
+    data: Data,
+    index: Index,
+    reference: Reference,
+}
+
+impl Store {
+    pub fn new(store: &Database) -> Result<Self, Box<dyn Error>> {
+        let data = Data::new(store.as_ref())?;
+        let index = Index::new(store.as_ref())?;
+        let reference = Reference::new(store.as_ref())?;
+
+        Ok(Self {
+            data,
+            index,
+            reference,
+        })
+    }
+}
+
+impl Store {
+    pub fn insert(&self, batch: &mut Batch, position: Position, event: Event) {
+        let event = event.into();
+
+        self.data.insert(batch, position, &event);
+        self.index.insert(batch, position, &event);
+        self.reference.insert(batch, position, &event);
+    }
+}
+
+impl AsRef<Data> for Store {
+    fn as_ref(&self) -> &Data {
+        &self.data
+    }
+}
+
+impl AsRef<Index> for Store {
+    fn as_ref(&self) -> &Index {
+        &self.index
+    }
+}
+
+impl AsRef<Reference> for Store {
+    fn as_ref(&self) -> &Reference {
+        &self.reference
+    }
+}
+
+// -------------------------------------------------------------------------------------------------
+
+// Hashed Event
+
+#[derive(Debug)]
+pub struct HashedEvent {
+    data: Vec<u8>,
+    descriptor: HashedDescriptor,
+    tags: Vec<HashedTag>,
+}
+
+impl From<Event> for HashedEvent {
+    fn from(value: Event) -> Self {
+        let data = value.data;
+        let descriptor = value.descriptor.into();
+        let tags = value.tags.into_iter().map(Into::into).collect();
+
+        Self {
+            data,
+            descriptor,
+            tags,
+        }
     }
 }
 
@@ -86,8 +175,14 @@ impl HashedDescriptor {
 
 impl From<Descriptor> for HashedDescriptor {
     fn from(value: Descriptor) -> Self {
-        let bytes = value.identifier().value().as_bytes();
-        let identifier = v3::rapidhash_v3_seeded(bytes, &SEED).into();
+        let mut bytes = Vec::new();
+
+        {
+            bytes.put_slice(value.identifier().value().as_bytes());
+            bytes.put_u8(value.version().value());
+        }
+
+        let identifier = v3::rapidhash_v3_seeded(&bytes, &SEED).into();
 
         Self(identifier, value)
     }

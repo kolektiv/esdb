@@ -1,7 +1,8 @@
 use std::error::Error;
 
 use esdb::{
-    Store,
+    Database,
+    Event,
     Stream,
 };
 use fjall::PartitionCreateOptions;
@@ -9,35 +10,30 @@ use fjall::PartitionCreateOptions;
 static PATH: &str = "./data/esdb/experiments";
 
 pub fn main() -> Result<(), Box<dyn Error>> {
-    let data = Store::new(PATH)?;
-
     {
-        let mut batch = data.batch();
-        let mut stream = Stream::new(&data)?;
+        let mut stream = Stream::new(PATH)?;
 
-        stream.append(&mut batch, vec![
-            (
-                "hello world!".bytes().collect(),
-                ("type:a", 0).into(),
-                vec!["tag:a".into(), "tag:b".into()],
-            ),
-            ("oh, no!".bytes().collect(), ("type:b", 0).into(), vec![
+        stream.append(vec![
+            Event::new("hello world!", ("type:a", 0), vec![
+                "tag:a".into(),
+                "tag:b".into(),
+            ]),
+            Event::new("oh, no!", ("type:b", 0), vec![
                 "tag:a".into(),
                 "tag:c".into(),
             ]),
-            (
-                "goodbye world...".bytes().collect(),
-                ("type:a", 1).into(),
-                vec!["tag:a".into(), "tag:d".into()],
-            ),
+            Event::new("goodbye world...", ("type:a", 1), vec![
+                "tag:a".into(),
+                "tag:d".into(),
+            ]),
         ])?;
-
-        batch.commit()?;
     }
 
-    for partition in data.as_ref().list_partitions() {
+    let database = Database::new(PATH)?;
+
+    for partition in database.as_ref().list_partitions() {
         let partition_options = PartitionCreateOptions::default();
-        let partition = data
+        let partition = database
             .as_ref()
             .open_partition(&partition, partition_options)?;
 
