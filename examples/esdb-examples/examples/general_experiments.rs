@@ -1,64 +1,94 @@
-use std::error::Error;
-
-use bytes::{
-    BufMut as _,
-    BytesMut,
+use std::{
+    error::Error,
+    time::Instant,
 };
 
+use bytes::{
+    Buf as _,
+    BufMut as _,
+};
+use musli::{
+    Decode,
+    Encode,
+    Options,
+    options::{
+        self,
+        ByteOrder,
+    },
+    packed::Encoding,
+};
+
+const OPTIONS: Options = options::new().fixed().byte_order(ByteOrder::Big).build();
+const ENCODING: Encoding<OPTIONS> = Encoding::new().with_options();
+
 pub fn main() -> Result<(), Box<dyn Error>> {
-    let mut keys = Vec::new();
-    let mut key = BytesMut::with_capacity(18);
+    let descriptor = 324_724_u64;
+    let tags = [234_723_564_u64, 1231u64, 24878u64, 1_348_137_487u64]
+        .into_iter()
+        .collect::<Vec<_>>();
+    let data = "this is some sample data".bytes().collect::<Vec<_>>();
 
-    key.put_u8(0);
-    key.put_u64(0);
-    key.put_u8(0);
-    key.put_u64(234);
+    let test = TestStruct {
+        descriptor,
+        tags: tags.clone(),
+        data: data.clone(),
+    };
 
-    keys.push(key.to_vec());
+    let start = Instant::now();
 
-    key.clear();
-    key.put_u8(0);
-    key.put_u64(1);
-    key.put_u8(2);
-    key.put_u64(234);
+    for _ in 0..1_000_000 {
+        let mut encoded = Vec::new();
 
-    keys.push(key.to_vec());
+        ENCODING.encode(&mut encoded, &test)?;
 
-    key.clear();
-    key.put_u8(0);
-    key.put_u64(2);
-    key.put_u8(1);
-    key.put_u64(234);
+        let _decoded: TestStruct = ENCODING.decode(&encoded[..])?;
+    }
 
-    keys.push(key.to_vec());
+    let duration = Instant::now().duration_since(start);
 
-    println!("keys: {keys:?}");
+    println!("musli: {duration:#?}");
 
-    keys.sort_unstable();
+    let start = Instant::now();
 
-    println!("keys sorted: {keys:?}");
+    for _ in 0..1_000_000 {
+        let mut encoded = Vec::new();
 
-    key.clear();
-    key.put_u8(0);
-    key.put_u64(0);
-    key.put_u8(0);
-    key.put_u64(234);
+        {
+            encoded.put_u64(descriptor);
+            encoded.put_u8(u8::try_from(tags.len()).expect("invalid tags"));
 
-    let lower = key.to_vec();
+            for tag in &tags {
+                encoded.put_u64(*tag);
+            }
 
-    key.clear();
-    key.put_u8(0);
-    key.put_u64(u64::MAX);
-    key.put_u8(1);
-    key.put_u64(234);
+            encoded.put_slice(&data[..]);
+        }
 
-    let upper = key.to_vec();
+        let mut encoded = &encoded[..];
 
-    let range = lower..upper;
+        let _descriptor = encoded.get_u64();
 
-    keys.iter()
-        .filter(|k| range.contains(*k))
-        .for_each(|k| println!("k: {k:?}"));
+        let tags_len = encoded.get_u8();
+        let mut tags = Vec::new();
+
+        for _ in 0..tags_len {
+            tags.push(encoded.get_u64());
+        }
+
+        let _data = encoded[..].iter().collect::<Vec<_>>();
+    }
+
+    let duration = Instant::now().duration_since(start);
+
+    println!("buf: {duration:#?}");
 
     Ok(())
+}
+
+#[derive(Decode, Encode)]
+#[musli(packed)]
+pub struct TestStruct {
+    descriptor: u64,
+    tags: Vec<u64>,
+    data: Vec<u8>,
 }
