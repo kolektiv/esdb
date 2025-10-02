@@ -57,6 +57,7 @@ static DESCRIPTOR_LOOKUP_REFERENCE_KEY_LEN: usize = ID_LEN + DESCRIPTOR_HASH_LEN
 
 fn insert_descriptor_lookup(ctx: &mut WriteContext<'_>, descriptor: &HashedDescriptor) {
     let mut key = [0u8; DESCRIPTOR_LOOKUP_REFERENCE_KEY_LEN];
+
     let value = descriptor.as_ref().identifier().value().as_bytes();
 
     write_descriptor_lookup_key(&mut key, descriptor);

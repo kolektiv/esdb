@@ -8,6 +8,7 @@ use std::{
 };
 
 use derive_more::Debug;
+use fancy_constructor::new;
 use fjall::{
     Batch,
     Config,
@@ -40,20 +41,26 @@ static SEED: RapidSecrets = RapidSecrets::seed(0x2811_2017);
 
 // Context
 
+#[derive(new, Debug)]
+#[new(vis(pub(crate)))]
 pub struct ReadContext<'a> {
-    pub(crate) partitions: &'a Partitions,
+    partitions: &'a Partitions,
 }
 
+#[derive(new, Debug)]
+#[new(vis(pub(crate)))]
 pub struct WriteContext<'a> {
-    pub(crate) batch: &'a mut Batch,
-    pub(crate) partitions: &'a Partitions,
+    #[debug("Batch")]
+    batch: &'a mut Batch,
+    partitions: &'a Partitions,
 }
 
 // -------------------------------------------------------------------------------------------------
 
 // Database
 
-#[derive(Debug)]
+#[derive(new, Debug)]
+#[new(vis())]
 pub struct Database {
     #[debug("Keyspace")]
     keyspace: Keyspace,
@@ -70,22 +77,17 @@ where
     P: AsRef<Path>,
 {
     let keyspace = Config::new(path).open()?;
+    let database = Database::new(keyspace);
 
-    Ok(Database { keyspace })
-}
-
-impl Database {
-    #[must_use]
-    pub fn batch(&self) -> Batch {
-        self.keyspace.batch()
-    }
+    Ok(database)
 }
 
 // -------------------------------------------------------------------------------------------------
 
 // Partitions
 
-#[derive(Debug)]
+#[derive(new, Debug)]
+#[new(vis())]
 pub struct Partitions {
     #[debug("PartitionHandle(\"{}\")", data.name)]
     data: PartitionHandle,
@@ -100,11 +102,9 @@ pub fn partitions(database: &Database) -> Result<Partitions, Box<dyn Error>> {
     let index = index::partition(database)?;
     let reference = reference::partition(database)?;
 
-    Ok(Partitions {
-        data,
-        index,
-        reference,
-    })
+    let partitions = Partitions::new(data, index, reference);
+
+    Ok(partitions)
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -159,8 +159,7 @@ impl From<Event> for HashedEvent {
 pub struct HashedDescriptor(u64, Descriptor);
 
 impl HashedDescriptor {
-    #[must_use]
-    pub fn hash(&self) -> u64 {
+    fn hash(&self) -> u64 {
         self.0
     }
 }
@@ -186,8 +185,7 @@ impl From<Descriptor> for HashedDescriptor {
 pub struct HashedDescriptorSpecifier(u64, DescriptorSpecifier);
 
 impl HashedDescriptorSpecifier {
-    #[must_use]
-    pub fn hash(&self) -> u64 {
+    fn hash(&self) -> u64 {
         self.0
     }
 }
@@ -217,8 +215,7 @@ impl From<DescriptorSpecifier> for HashedDescriptorSpecifier {
 pub struct HashedTag(u64, Tag);
 
 impl HashedTag {
-    #[must_use]
-    pub fn hash(&self) -> u64 {
+    fn hash(&self) -> u64 {
         self.0
     }
 }

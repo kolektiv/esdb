@@ -64,9 +64,7 @@ impl Stream {
         let database = persistence::database(path)?;
         let partitions = persistence::partitions(&database)?;
 
-        let len = persistence::data::len(&ReadContext {
-            partitions: &partitions,
-        })?;
+        let len = persistence::data::len(&ReadContext::new(&partitions))?;
 
         let position = len.into();
 
@@ -86,10 +84,7 @@ impl Stream {
         let mut batch = self.database.as_ref().batch();
 
         {
-            let mut ctx = WriteContext {
-                batch: &mut batch,
-                partitions: &self.partitions,
-            };
+            let mut ctx = WriteContext::new(&mut batch, &self.partitions);
 
             for event in events {
                 persistence::insert(&mut ctx, self.position, event);
@@ -106,15 +101,11 @@ impl Stream {
 
 impl Stream {
     pub fn is_empty(&self) -> Result<bool, Box<dyn Error>> {
-        persistence::data::is_empty(&ReadContext {
-            partitions: &self.partitions,
-        })
+        persistence::data::is_empty(&ReadContext::new(&self.partitions))
     }
 
     pub fn len(&self) -> Result<u64, Box<dyn Error>> {
-        persistence::data::len(&ReadContext {
-            partitions: &self.partitions,
-        })
+        persistence::data::len(&ReadContext::new(&self.partitions))
     }
 }
 
