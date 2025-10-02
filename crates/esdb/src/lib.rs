@@ -3,7 +3,7 @@
 #![allow(clippy::missing_panics_doc)]
 
 mod model;
-mod persistence;
+pub mod persistence;
 
 pub use self::{
     model::{

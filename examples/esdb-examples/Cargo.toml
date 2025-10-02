@@ -1,12 +1,8 @@
 [dependencies]
 bytes.workspace     = true
-deku.workspace      = true
 esdb.workspace      = true
 fjall.workspace     = true
-musli.workspace     = true
-rand.workspace      = true
 rapidhash.workspace = true
-rocksdb.workspace   = true
 
 [lints]
 workspace = true

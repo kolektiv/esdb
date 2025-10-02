@@ -1,9 +1,9 @@
 use std::error::Error;
 
 use esdb::{
-    Database,
     Event,
     Stream,
+    persistence,
 };
 use fjall::PartitionCreateOptions;
 
@@ -28,7 +28,7 @@ pub fn main() -> Result<(), Box<dyn Error>> {
         ])?;
     }
 
-    let database = Database::new(PATH)?;
+    let database = persistence::database(PATH)?;
 
     for partition in database.as_ref().list_partitions() {
         let partition_options = PartitionCreateOptions::default();

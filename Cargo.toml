@@ -6,17 +6,11 @@ resolver = "2"
 
 # External
 
-bytes       = { version = "1" }
-deku        = { version = "0.19", features = ["std"], default-features = false }
-derive_more = { version = "2", features = ["full"] }
-fjall       = { version = "2" }
-jiff        = { version = "0.2" }
-multimap    = { version = "0.10" }
-musli       = { version = "0.0.149", features = ["storage"] }
-rand        = { version = "0.9" }
-rapidhash   = { version = "4" }
-rocksdb     = { version = "0.24" }
-serial_test = { version = "3" }
+bytes             = { version = "1" }
+derive_more       = { version = "2", features = ["full"] }
+fancy_constructor = { version = "2" }
+fjall             = { version = "2" }
+rapidhash         = { version = "4" }
 
 # Workspace
 

@@ -12,25 +12,19 @@ use fjall::{
     Batch,
     Config,
     Keyspace,
+    PartitionHandle,
 };
 use rapidhash::v3::{
     self,
     RapidSecrets,
 };
 
-use crate::{
-    model::{
-        Descriptor,
-        DescriptorSpecifier,
-        Event,
-        Position,
-        Tag,
-    },
-    persistence::{
-        data::Data,
-        index::Index,
-        reference::Reference,
-    },
+use crate::model::{
+    Descriptor,
+    DescriptorSpecifier,
+    Event,
+    Position,
+    Tag,
 };
 
 // =================================================================================================
@@ -40,10 +34,20 @@ use crate::{
 // Configuration
 
 static POSITION_LEN: usize = size_of::<u64>();
-
-// RapidHash
-
 static SEED: RapidSecrets = RapidSecrets::seed(0x2811_2017);
+
+// -------------------------------------------------------------------------------------------------
+
+// Context
+
+pub struct ReadContext<'a> {
+    pub(crate) partitions: &'a Partitions,
+}
+
+pub struct WriteContext<'a> {
+    pub(crate) batch: &'a mut Batch,
+    pub(crate) partitions: &'a Partitions,
+}
 
 // -------------------------------------------------------------------------------------------------
 
@@ -55,15 +59,19 @@ pub struct Database {
     keyspace: Keyspace,
 }
 
-impl Database {
-    pub fn new<P>(path: P) -> Result<Self, Box<dyn Error>>
-    where
-        P: AsRef<Path>,
-    {
-        let keyspace = Config::new(path).open()?;
-
-        Ok(Self { keyspace })
+impl AsRef<Keyspace> for Database {
+    fn as_ref(&self) -> &Keyspace {
+        &self.keyspace
     }
+}
+
+pub fn database<P>(path: P) -> Result<Database, Box<dyn Error>>
+where
+    P: AsRef<Path>,
+{
+    let keyspace = Config::new(path).open()?;
+
+    Ok(Database { keyspace })
 }
 
 impl Database {
@@ -73,63 +81,47 @@ impl Database {
     }
 }
 
-impl AsRef<Keyspace> for Database {
-    fn as_ref(&self) -> &Keyspace {
-        &self.keyspace
-    }
+// -------------------------------------------------------------------------------------------------
+
+// Partitions
+
+#[derive(Debug)]
+pub struct Partitions {
+    #[debug("PartitionHandle(\"{}\")", data.name)]
+    data: PartitionHandle,
+    #[debug("PartitionHandle(\"{}\")", index.name)]
+    index: PartitionHandle,
+    #[debug("PartitionHandle(\"{}\")", reference.name)]
+    reference: PartitionHandle,
+}
+
+pub fn partitions(database: &Database) -> Result<Partitions, Box<dyn Error>> {
+    let data = data::partition(database)?;
+    let index = index::partition(database)?;
+    let reference = reference::partition(database)?;
+
+    Ok(Partitions {
+        data,
+        index,
+        reference,
+    })
 }
 
 // -------------------------------------------------------------------------------------------------
 
-// Store
+// Insertion
 
-#[derive(Debug)]
-pub struct Store {
-    data: Data,
-    index: Index,
-    reference: Reference,
-}
+pub fn insert(ctx: &mut WriteContext<'_>, position: Position, event: Event) {
+    let event = event.into();
 
-impl Store {
-    pub fn new(store: &Database) -> Result<Self, Box<dyn Error>> {
-        let data = Data::new(store.as_ref())?;
-        let index = Index::new(store.as_ref())?;
-        let reference = Reference::new(store.as_ref())?;
+    // self.data.insert(batch, position, &event);
+    // self.index.insert(batch, position, &event);
 
-        Ok(Self {
-            data,
-            index,
-            reference,
-        })
-    }
-}
+    data::insert(ctx, position, &event);
+    index::insert(ctx, position, &event);
+    reference::insert(ctx, &event);
 
-impl Store {
-    pub fn insert(&self, batch: &mut Batch, position: Position, event: Event) {
-        let event = event.into();
-
-        self.data.insert(batch, position, &event);
-        self.index.insert(batch, position, &event);
-        self.reference.insert(batch, position, &event);
-    }
-}
-
-impl AsRef<Data> for Store {
-    fn as_ref(&self) -> &Data {
-        &self.data
-    }
-}
-
-impl AsRef<Index> for Store {
-    fn as_ref(&self) -> &Index {
-        &self.index
-    }
-}
-
-impl AsRef<Reference> for Store {
-    fn as_ref(&self) -> &Reference {
-        &self.reference
-    }
+    // self.reference.insert(batch, position, &event);
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -167,6 +159,7 @@ impl From<Event> for HashedEvent {
 pub struct HashedDescriptor(u64, Descriptor);
 
 impl HashedDescriptor {
+    #[must_use]
     pub fn hash(&self) -> u64 {
         self.0
     }
@@ -193,6 +186,7 @@ impl From<Descriptor> for HashedDescriptor {
 pub struct HashedDescriptorSpecifier(u64, DescriptorSpecifier);
 
 impl HashedDescriptorSpecifier {
+    #[must_use]
     pub fn hash(&self) -> u64 {
         self.0
     }
@@ -223,6 +217,7 @@ impl From<DescriptorSpecifier> for HashedDescriptorSpecifier {
 pub struct HashedTag(u64, Tag);
 
 impl HashedTag {
+    #[must_use]
     pub fn hash(&self) -> u64 {
         self.0
     }

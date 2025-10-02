@@ -4,75 +4,75 @@ use bytes::{
     Buf as _,
     BufMut as _,
 };
-use derive_more::Debug;
 use fjall::{
-    Batch,
-    Keyspace,
     PartitionCreateOptions,
     PartitionHandle,
 };
 
 use crate::{
     model::Position,
-    persistence::HashedEvent,
+    persistence::{
+        Database,
+        HashedEvent,
+        ReadContext,
+        WriteContext,
+    },
 };
 
 // =================================================================================================
 // Data
 // =================================================================================================
 
-// Configuration
-
 static DATA_PARTITION_NAME: &str = "data";
+
+// Partition
+
+pub fn partition(database: &Database) -> Result<PartitionHandle, Box<dyn Error>> {
+    let name = DATA_PARTITION_NAME;
+    let options = PartitionCreateOptions::default();
+    let partition = database.as_ref().open_partition(name, options)?;
+
+    Ok(partition)
+}
+
+// Partition Properties
+
+pub fn is_empty(ctx: &ReadContext<'_>) -> Result<bool, Box<dyn Error>> {
+    len(ctx).map(|len| len == 0)
+}
+
+pub fn len(ctx: &ReadContext<'_>) -> Result<u64, Box<dyn Error>> {
+    let last = ctx.partitions.data.last_key_value()?;
+    let len = match last {
+        Some((key, _)) => key.as_ref().get_u64() + 1,
+        None => 0,
+    };
+
+    Ok(len)
+}
+
+// Partition Insertion
+
+pub fn insert(ctx: &mut WriteContext<'_>, position: Position, event: &HashedEvent) {
+    insert_event(ctx, position, event);
+}
 
 // -------------------------------------------------------------------------------------------------
 
-// Data
+// Event
 
-#[derive(Debug)]
-pub struct Data {
-    #[debug("PartitionHandle(\"{}\")", data.name)]
-    data: PartitionHandle,
+// Event Insertion
+
+fn insert_event(ctx: &mut WriteContext<'_>, position: Position, event: &HashedEvent) {
+    let key = position.value().to_be_bytes();
+    let mut value = Vec::new();
+
+    write_event_value(&mut value, event);
+
+    ctx.batch.insert(&ctx.partitions.data, key, value);
 }
 
-impl Data {
-    pub fn new(keyspace: &Keyspace) -> Result<Self, Box<dyn Error>> {
-        let data_name = DATA_PARTITION_NAME;
-        let data_options = PartitionCreateOptions::default();
-        let data = keyspace.open_partition(data_name, data_options)?;
-
-        Ok(Self { data })
-    }
-}
-
-impl Data {
-    pub fn is_empty(&self) -> Result<bool, Box<dyn Error>> {
-        self.len().map(|len| len == 0)
-    }
-
-    pub fn len(&self) -> Result<u64, Box<dyn Error>> {
-        let last = self.data.last_key_value()?;
-        let len = match last {
-            Some((key, _)) => key.as_ref().get_u64() + 1,
-            None => 0,
-        };
-
-        Ok(len)
-    }
-}
-
-impl Data {
-    pub fn insert(&self, batch: &mut Batch, position: Position, event: &HashedEvent) {
-        let key = position.value().to_be_bytes();
-        let mut value = Vec::new();
-
-        get_data_value(&mut value, event);
-
-        batch.insert(&self.data, key, value);
-    }
-}
-
-fn get_data_value(value: &mut Vec<u8>, event: &HashedEvent) {
+fn write_event_value(value: &mut Vec<u8>, event: &HashedEvent) {
     let descriptor_identifier = event.descriptor.hash();
     let descriptor_version = event.descriptor.as_ref().version().value();
     let tags_len = u8::try_from(event.tags.len()).expect("max tag count exceeded");

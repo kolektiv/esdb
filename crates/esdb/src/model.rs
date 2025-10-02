@@ -7,9 +7,11 @@ use std::{
 use derive_more::Debug;
 
 use crate::persistence::{
+    self,
     Database,
-    Store,
-    data::Data,
+    Partitions,
+    ReadContext,
+    WriteContext,
 };
 
 // =================================================================================================
@@ -50,8 +52,8 @@ impl Event {
 #[derive(Debug)]
 pub struct Stream {
     database: Database,
+    partitions: Partitions,
     position: Position,
-    store: Store,
 }
 
 impl Stream {
@@ -59,14 +61,19 @@ impl Stream {
     where
         P: AsRef<Path>,
     {
-        let database = Database::new(path)?;
-        let store = Store::new(&database)?;
-        let position = AsRef::<Data>::as_ref(&store).len().map(Into::into)?;
+        let database = persistence::database(path)?;
+        let partitions = persistence::partitions(&database)?;
+
+        let len = persistence::data::len(&ReadContext {
+            partitions: &partitions,
+        })?;
+
+        let position = len.into();
 
         Ok(Self {
             database,
+            partitions,
             position,
-            store,
         })
     }
 }
@@ -76,11 +83,19 @@ impl Stream {
     where
         E: IntoIterator<Item = Event>,
     {
-        let mut batch = self.database.batch();
+        let mut batch = self.database.as_ref().batch();
 
-        for event in events {
-            self.store.insert(&mut batch, self.position, event);
-            self.position.increment();
+        {
+            let mut ctx = WriteContext {
+                batch: &mut batch,
+                partitions: &self.partitions,
+            };
+
+            for event in events {
+                persistence::insert(&mut ctx, self.position, event);
+
+                self.position.increment();
+            }
         }
 
         batch.commit()?;
@@ -91,11 +106,15 @@ impl Stream {
 
 impl Stream {
     pub fn is_empty(&self) -> Result<bool, Box<dyn Error>> {
-        AsRef::<Data>::as_ref(&self.store).is_empty()
+        persistence::data::is_empty(&ReadContext {
+            partitions: &self.partitions,
+        })
     }
 
     pub fn len(&self) -> Result<u64, Box<dyn Error>> {
-        AsRef::<Data>::as_ref(&self.store).len()
+        persistence::data::len(&ReadContext {
+            partitions: &self.partitions,
+        })
     }
 }
 
@@ -184,8 +203,8 @@ impl DescriptorSpecifier {
         &self.0
     }
 
-    pub fn range(&self) -> &Option<Range<DescriptorVersion>> {
-        &self.1
+    pub fn range(&self) -> Option<&Range<DescriptorVersion>> {
+        self.1.as_ref()
     }
 }
 
