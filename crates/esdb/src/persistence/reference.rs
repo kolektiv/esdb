@@ -24,9 +24,8 @@ use crate::{
 
 // Configuration
 
+static ID_LEN: usize = size_of::<u8>();
 static REFERENCE_PARTITION_NAME: &str = "reference";
-
-static PREFIX_LEN: usize = size_of::<u8>();
 
 // -------------------------------------------------------------------------------------------------
 
@@ -95,8 +94,8 @@ impl DescriptorReference {
 
 // Configuration
 
-static DESCRIPTOR_LOOKUP_REFERENCE_KEY: u8 = 0;
-static DESCRIPTOR_LOOKUP_REFERENCE_KEY_LEN: usize = PREFIX_LEN + DESCRIPTOR_HASH_LEN;
+static DESCRIPTOR_LOOKUP_REFERENCE_ID: u8 = 0;
+static DESCRIPTOR_LOOKUP_REFERENCE_KEY_LEN: usize = ID_LEN + DESCRIPTOR_HASH_LEN;
 
 // Reference
 
@@ -115,19 +114,25 @@ impl DescriptorLookupReference {
 impl DescriptorLookupReference {
     fn insert(&self, batch: &mut Batch, descriptor: &HashedDescriptor) {
         let mut key = [0u8; DESCRIPTOR_LOOKUP_REFERENCE_KEY_LEN];
-        let mut value = Vec::new();
+        let value = descriptor.as_ref().identifier().value().as_bytes();
 
-        {
-            let mut key = &mut key[..];
-
-            key.put_u8(DESCRIPTOR_LOOKUP_REFERENCE_KEY);
-            key.put_u64(descriptor.hash());
-
-            value.put_slice(descriptor.as_ref().identifier().value().as_bytes());
-        }
+        get_descriptor_lookup_key(&mut key, descriptor);
 
         batch.insert(&self.reference, key, value);
     }
+}
+
+fn get_descriptor_lookup_key(
+    key: &mut [u8; DESCRIPTOR_LOOKUP_REFERENCE_KEY_LEN],
+    descriptor: &HashedDescriptor,
+) {
+    let mut key = &mut key[..];
+
+    let reference_id = DESCRIPTOR_LOOKUP_REFERENCE_ID;
+    let descriptor_identifier = descriptor.hash();
+
+    key.put_u8(reference_id);
+    key.put_u64(descriptor_identifier);
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -167,8 +172,8 @@ impl TagReference {
 
 // Configuration
 
-static TAG_LOOKUP_REFERENCE_KEY: u8 = 1;
-static TAG_LOOKUP_REFERENCE_KEY_LEN: usize = PREFIX_LEN + TAG_HASH_LEN;
+static TAG_LOOKUP_REFERENCE_ID: u8 = 1;
+static TAG_LOOKUP_REFERENCE_KEY_LEN: usize = ID_LEN + TAG_HASH_LEN;
 
 // Reference
 
@@ -189,16 +194,21 @@ impl TagLookupReference {
         let mut key = [0u8; TAG_LOOKUP_REFERENCE_KEY_LEN];
 
         for tag in tags {
-            {
-                let mut key = &mut key[..];
-
-                key.put_u8(TAG_LOOKUP_REFERENCE_KEY);
-                key.put_u64(tag.hash());
-            }
+            get_tag_lookup_key(&mut key, tag);
 
             let value = tag.as_ref().value().as_bytes();
 
             batch.insert(&self.reference, key, value);
         }
     }
+}
+
+fn get_tag_lookup_key(key: &mut [u8; TAG_LOOKUP_REFERENCE_KEY_LEN], tag: &HashedTag) {
+    let mut key = &mut key[..];
+
+    let reference_id = TAG_LOOKUP_REFERENCE_ID;
+    let tag = tag.hash();
+
+    key.put_u8(reference_id);
+    key.put_u64(tag);
 }

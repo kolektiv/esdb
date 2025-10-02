@@ -41,6 +41,8 @@ use crate::{
 
 static POSITION_LEN: usize = size_of::<u64>();
 
+// RapidHash
+
 static SEED: RapidSecrets = RapidSecrets::seed(0x2811_2017);
 
 // -------------------------------------------------------------------------------------------------

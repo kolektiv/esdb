@@ -29,9 +29,8 @@ use crate::{
 
 // Configuration
 
+static ID_LEN: usize = size_of::<u8>();
 static INDEX_PARTITION_NAME: &str = "index";
-
-static PREFIX_LEN: usize = size_of::<u8>();
 
 // -------------------------------------------------------------------------------------------------
 
@@ -70,7 +69,6 @@ impl Index {
 // Configuration
 
 static DESCRIPTOR_HASH_LEN: usize = size_of::<u64>();
-static DESCRIPTOR_VERSION_LEN: usize = size_of::<u8>();
 
 // -------------------------------------------------------------------------------------------------
 
@@ -102,10 +100,9 @@ impl DescriptorIndex {
 
 // Configuration
 
-static DESCRIPTOR_FORWARD_INDEX_KEY: u8 = 0;
-static DESCRIPTOR_KEY_LEN: usize = PREFIX_LEN + DESCRIPTOR_HASH_LEN + POSITION_LEN;
-static DESCRIPTOR_VALUE_LEN: usize = DESCRIPTOR_VERSION_LEN;
-static DESCRIPTOR_PREFIX_LEN: usize = PREFIX_LEN + DESCRIPTOR_HASH_LEN;
+static DESCRIPTOR_FORWARD_INDEX_ID: u8 = 0;
+static DESCRIPTOR_FORWARD_INDEX_KEY_LEN: usize = ID_LEN + DESCRIPTOR_HASH_LEN + POSITION_LEN;
+static DESCRIPTOR_FORWARD_INDEX_PREFIX_LEN: usize = ID_LEN + DESCRIPTOR_HASH_LEN;
 
 // Index
 
@@ -124,20 +121,10 @@ impl DescriptorForwardIndex {
 
 impl DescriptorForwardIndex {
     pub fn insert(&self, batch: &mut Batch, position: Position, descriptor: &HashedDescriptor) {
-        let mut key = [0u8; DESCRIPTOR_KEY_LEN];
-        let mut value = [0u8; DESCRIPTOR_VALUE_LEN];
+        let mut key = [0u8; DESCRIPTOR_FORWARD_INDEX_KEY_LEN];
+        let value = descriptor.as_ref().version().value().to_be_bytes();
 
-        {
-            let mut key = &mut key[..];
-
-            key.put_u8(DESCRIPTOR_FORWARD_INDEX_KEY);
-            key.put_u64(descriptor.hash());
-            key.put_u64(position.value());
-
-            let mut value = &mut value[..];
-
-            value.put_u8(descriptor.as_ref().version().value());
-        }
+        get_descriptor_forward_key(&mut key, position, descriptor);
 
         batch.insert(&self.index, key, value);
     }
@@ -146,6 +133,22 @@ impl DescriptorForwardIndex {
     pub fn view(&self, descriptor: HashedDescriptorSpecifier) -> DescriptorForwardIndexView {
         DescriptorForwardIndexView::new(self.index.clone(), descriptor)
     }
+}
+
+fn get_descriptor_forward_key(
+    key: &mut [u8; DESCRIPTOR_FORWARD_INDEX_KEY_LEN],
+    position: Position,
+    descriptor: &HashedDescriptor,
+) {
+    let mut key = &mut key[..];
+
+    let index_id = DESCRIPTOR_FORWARD_INDEX_ID;
+    let descriptor_identifier = descriptor.hash();
+    let position = position.value();
+
+    key.put_u8(index_id);
+    key.put_u64(descriptor_identifier);
+    key.put_u64(position);
 }
 
 // View
@@ -168,35 +171,24 @@ impl IntoIterator for DescriptorForwardIndexView {
     type Item = u64;
 
     fn into_iter(self) -> Self::IntoIter {
-        let hash = self.specifier.hash();
+        let mut prefix = [0u8; DESCRIPTOR_FORWARD_INDEX_PREFIX_LEN];
 
-        let mut prefix = [0u8; DESCRIPTOR_PREFIX_LEN];
+        get_descriptor_forward_prefix(&mut prefix, &self.specifier);
 
-        {
-            let mut prefix = &mut prefix[..];
-
-            prefix.put_u8(DESCRIPTOR_FORWARD_INDEX_KEY);
-            prefix.put_u64(hash);
-        }
-
-        let version_bounds = self
-            .specifier
-            .as_ref()
-            .range()
+        let version_range = self.specifier.as_ref().range();
+        let version_bounds = version_range
             .as_ref()
             .map_or((u8::MIN, u8::MAX), |r| (r.start.value(), r.end.value()));
 
         let version_min = version_bounds.0;
         let version_max = version_bounds.1;
-        let version_perform_filter = version_min > u8::MIN || version_max < u8::MAX;
+        let version_filter = version_min > u8::MIN || version_max < u8::MAX;
 
         let iterator = Box::new(self.index.prefix(prefix).filter_map(move |kv| {
             let (k, v) = kv.expect("invalid key/value during iteration");
 
-            if version_perform_filter {
-                let mut v = &v[..];
-
-                let version = v.get_u8();
+            if version_filter {
+                let version = v.as_ref().get_u8();
 
                 if !(version_min..version_max).contains(&version) {
                     return None;
@@ -205,7 +197,7 @@ impl IntoIterator for DescriptorForwardIndexView {
 
             let mut k = &k[..];
 
-            k.advance(PREFIX_LEN + DESCRIPTOR_HASH_LEN);
+            k.advance(ID_LEN + DESCRIPTOR_HASH_LEN);
 
             let position = k.get_u64();
 
@@ -214,6 +206,19 @@ impl IntoIterator for DescriptorForwardIndexView {
 
         DescriptorForwardIndexIterator::new(iterator)
     }
+}
+
+fn get_descriptor_forward_prefix(
+    prefix: &mut [u8; DESCRIPTOR_FORWARD_INDEX_PREFIX_LEN],
+    specifier: &HashedDescriptorSpecifier,
+) {
+    let mut prefix = &mut prefix[..];
+
+    let index_id = DESCRIPTOR_FORWARD_INDEX_ID;
+    let descriptor_identifier = specifier.hash();
+
+    prefix.put_u8(index_id);
+    prefix.put_u64(descriptor_identifier);
 }
 
 // Iterator
@@ -276,8 +281,8 @@ impl TagIndex {
 
 // Configuration
 
-static TAG_FORWARD_INDEX_KEY: u8 = 1;
-static TAG_KEY_LEN: usize = PREFIX_LEN + TAG_HASH_LEN + POSITION_LEN;
+static TAG_FORWARD_INDEX_ID: u8 = 1;
+static TAG_FORWARD_INDEX_KEY_LEN: usize = ID_LEN + TAG_HASH_LEN + POSITION_LEN;
 
 // Index
 
@@ -296,16 +301,10 @@ impl TagForwardIndex {
 
 impl TagForwardIndex {
     pub fn insert(&self, batch: &mut Batch, position: Position, tags: &[HashedTag]) {
-        let mut key = [0u8; TAG_KEY_LEN];
+        let mut key = [0u8; TAG_FORWARD_INDEX_KEY_LEN];
 
         for tag in tags {
-            {
-                let mut key = &mut key[..];
-
-                key.put_u8(TAG_FORWARD_INDEX_KEY);
-                key.put_u64(tag.hash());
-                key.put_u64(position.value());
-            }
+            get_tag_forward_key(&mut key, position, tag);
 
             batch.insert(&self.index, key, []);
         }
@@ -315,4 +314,20 @@ impl TagForwardIndex {
     // pub fn view(&self, descriptor: HashedDescriptorSpecifier) ->
     // DescriptorForwardIndexView {     DescriptorForwardIndexView::new(self.
     // index.clone(), descriptor) }
+}
+
+fn get_tag_forward_key(
+    key: &mut [u8; TAG_FORWARD_INDEX_KEY_LEN],
+    position: Position,
+    tag: &HashedTag,
+) {
+    let mut key = &mut key[..];
+
+    let index_id = TAG_FORWARD_INDEX_ID;
+    let tag = tag.hash();
+    let position = position.value();
+
+    key.put_u8(index_id);
+    key.put_u64(tag);
+    key.put_u64(position);
 }

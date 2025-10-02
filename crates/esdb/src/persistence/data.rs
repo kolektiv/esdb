@@ -1,8 +1,8 @@
 use std::error::Error;
 
 use bytes::{
-    Buf,
-    BufMut,
+    Buf as _,
+    BufMut as _,
 };
 use derive_more::Debug;
 use fjall::{
@@ -14,10 +14,7 @@ use fjall::{
 
 use crate::{
     model::Position,
-    persistence::{
-        HashedEvent,
-        POSITION_LEN,
-    },
+    persistence::HashedEvent,
 };
 
 // =================================================================================================
@@ -56,7 +53,7 @@ impl Data {
     pub fn len(&self) -> Result<u64, Box<dyn Error>> {
         let last = self.data.last_key_value()?;
         let len = match last {
-            Some((index, _)) => index.as_ref().get_u64() + 1,
+            Some((key, _)) => key.as_ref().get_u64() + 1,
             None => 0,
         };
 
@@ -66,25 +63,31 @@ impl Data {
 
 impl Data {
     pub fn insert(&self, batch: &mut Batch, position: Position, event: &HashedEvent) {
-        let mut key = [0u8; POSITION_LEN];
+        let key = position.value().to_be_bytes();
         let mut value = Vec::new();
 
-        {
-            let mut key = &mut key[..];
-
-            key.put_u64(position.value());
-
-            value.put_u64(event.descriptor.hash());
-            value.put_u8(event.descriptor.as_ref().version().value());
-            value.put_u8(u8::try_from(event.tags.len()).expect("invalid tag count"));
-
-            for tag in &event.tags {
-                value.put_u64(tag.hash());
-            }
-
-            value.put_slice(&event.data);
-        }
+        get_data_value(&mut value, event);
 
         batch.insert(&self.data, key, value);
     }
+}
+
+fn get_data_value(value: &mut Vec<u8>, event: &HashedEvent) {
+    let descriptor_identifier = event.descriptor.hash();
+    let descriptor_version = event.descriptor.as_ref().version().value();
+    let tags_len = u8::try_from(event.tags.len()).expect("max tag count exceeded");
+
+    value.put_u64(descriptor_identifier);
+    value.put_u8(descriptor_version);
+    value.put_u8(tags_len);
+
+    for tag in &event.tags {
+        let tag = tag.hash();
+
+        value.put_u64(tag);
+    }
+
+    let data = &event.data;
+
+    value.put_slice(data);
 }
