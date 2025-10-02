@@ -28,11 +28,9 @@ static DATA_PARTITION_NAME: &str = "data";
 // Partition
 
 pub fn partition(database: &Database) -> Result<PartitionHandle, Box<dyn Error>> {
-    let name = DATA_PARTITION_NAME;
-    let options = PartitionCreateOptions::default();
-    let partition = database.as_ref().open_partition(name, options)?;
-
-    Ok(partition)
+    Ok(database
+        .as_ref()
+        .open_partition(DATA_PARTITION_NAME, PartitionCreateOptions::default())?)
 }
 
 // Partition Properties
@@ -42,13 +40,10 @@ pub fn is_empty(ctx: &ReadContext<'_>) -> Result<bool, Box<dyn Error>> {
 }
 
 pub fn len(ctx: &ReadContext<'_>) -> Result<u64, Box<dyn Error>> {
-    let last = ctx.partitions.data.last_key_value()?;
-    let len = match last {
+    Ok(match ctx.partitions.data.last_key_value()? {
         Some((key, _)) => key.as_ref().get_u64() + 1,
         None => 0,
-    };
-
-    Ok(len)
+    })
 }
 
 // Partition Insertion

@@ -28,11 +28,9 @@ static INDEX_PARTITION_NAME: &str = "index";
 // Partitions
 
 pub fn partition(database: &Database) -> Result<PartitionHandle, Box<dyn Error>> {
-    let name = INDEX_PARTITION_NAME;
-    let options = PartitionCreateOptions::default();
-    let partition = database.as_ref().open_partition(name, options)?;
-
-    Ok(partition)
+    Ok(database
+        .as_ref()
+        .open_partition(INDEX_PARTITION_NAME, PartitionCreateOptions::default())?)
 }
 
 // Partition Insertion

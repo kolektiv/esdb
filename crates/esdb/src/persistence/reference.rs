@@ -24,11 +24,9 @@ static REFERENCE_PARTITION_NAME: &str = "reference";
 // Partition
 
 pub fn partition(database: &Database) -> Result<PartitionHandle, Box<dyn Error>> {
-    let name = REFERENCE_PARTITION_NAME;
-    let options = PartitionCreateOptions::default();
-    let partition = database.as_ref().open_partition(name, options)?;
-
-    Ok(partition)
+    Ok(database
+        .as_ref()
+        .open_partition(REFERENCE_PARTITION_NAME, PartitionCreateOptions::default())?)
 }
 
 // Partition Insertion

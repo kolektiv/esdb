@@ -5,6 +5,7 @@ use std::{
 };
 
 use derive_more::Debug;
+use fancy_constructor::new;
 
 use crate::persistence::{
     self,
@@ -20,36 +21,22 @@ use crate::persistence::{
 
 // Event
 
-#[derive(Debug)]
+#[derive(new, Debug)]
 pub struct Event {
+    #[new(into)]
     pub data: Vec<u8>,
+    #[new(into)]
     pub descriptor: Descriptor,
+    #[new(into)]
     pub tags: Vec<Tag>,
-}
-
-impl Event {
-    pub fn new(
-        data: impl Into<Vec<u8>>,
-        descriptor: impl Into<Descriptor>,
-        tags: impl Into<Vec<Tag>>,
-    ) -> Self {
-        let data = data.into();
-        let descriptor = descriptor.into();
-        let tags = tags.into();
-
-        Self {
-            data,
-            descriptor,
-            tags,
-        }
-    }
 }
 
 // -------------------------------------------------------------------------------------------------
 
 // Stream
 
-#[derive(Debug)]
+#[derive(new, Debug)]
+#[new(name(new_internal), vis())]
 pub struct Stream {
     database: Database,
     partitions: Partitions,
@@ -65,14 +52,9 @@ impl Stream {
         let partitions = persistence::partitions(&database)?;
 
         let len = persistence::data::len(&ReadContext::new(&partitions))?;
-
         let position = len.into();
 
-        Ok(Self {
-            database,
-            partitions,
-            position,
-        })
+        Ok(Self::new_internal(database, partitions, position))
     }
 }
 
@@ -113,8 +95,9 @@ impl Stream {
 
 // Position
 
-#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub struct Position(u64);
+#[derive(new, Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[new(vis())]
+pub struct Position(#[new(into)] u64);
 
 impl Position {
     pub(crate) fn increment(&mut self) {
@@ -131,7 +114,7 @@ where
     T: Into<u64>,
 {
     fn from(value: T) -> Self {
-        Self(value.into())
+        Self::new(value)
     }
 }
 
@@ -141,8 +124,12 @@ where
 
 // Descriptor
 
-#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub struct Descriptor(DescriptorIdentifier, DescriptorVersion);
+#[derive(new, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[new(vis())]
+pub struct Descriptor(
+    #[new(into)] DescriptorIdentifier,
+    #[new(into)] DescriptorVersion,
+);
 
 impl Descriptor {
     pub fn identifier(&self) -> &DescriptorIdentifier {
@@ -160,14 +147,15 @@ where
     U: Into<DescriptorVersion>,
 {
     fn from(value: (T, U)) -> Self {
-        Self(value.0.into(), value.1.into())
+        Self::new(value.0, value.1)
     }
 }
 
 // Identifier
 
-#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub struct DescriptorIdentifier(String);
+#[derive(new, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[new(vis())]
+pub struct DescriptorIdentifier(#[new(into)] String);
 
 impl DescriptorIdentifier {
     pub fn value(&self) -> &str {
@@ -180,14 +168,18 @@ where
     T: Into<String>,
 {
     fn from(value: T) -> Self {
-        Self(value.into())
+        Self::new(value)
     }
 }
 
 // Specifier
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct DescriptorSpecifier(DescriptorIdentifier, Option<Range<DescriptorVersion>>);
+#[derive(new, Clone, Debug, Eq, PartialEq)]
+#[new(vis())]
+pub struct DescriptorSpecifier(
+    #[new(into)] DescriptorIdentifier,
+    #[new(into)] Option<Range<DescriptorVersion>>,
+);
 
 impl DescriptorSpecifier {
     pub fn identifier(&self) -> &DescriptorIdentifier {
@@ -205,14 +197,15 @@ where
     U: Into<Option<Range<DescriptorVersion>>>,
 {
     fn from(value: (T, U)) -> Self {
-        Self(value.0.into(), value.1.into())
+        Self::new(value.0, value.1)
     }
 }
 
 // Version
 
-#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub struct DescriptorVersion(u8);
+#[derive(new, Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[new(vis())]
+pub struct DescriptorVersion(#[new(into)] u8);
 
 impl DescriptorVersion {
     pub fn value(self) -> u8 {
@@ -225,7 +218,7 @@ where
     T: Into<u8>,
 {
     fn from(value: T) -> Self {
-        Self(value.into())
+        Self::new(value)
     }
 }
 
@@ -235,8 +228,9 @@ where
 
 // Tag
 
-#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub struct Tag(String);
+#[derive(new, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[new(vis())]
+pub struct Tag(#[new(into)] String);
 
 impl Tag {
     pub fn value(&self) -> &str {
@@ -249,6 +243,6 @@ where
     T: Into<String>,
 {
     fn from(value: T) -> Self {
-        Self(value.into())
+        Self::new(value)
     }
 }

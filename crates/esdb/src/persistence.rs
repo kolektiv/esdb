@@ -76,10 +76,7 @@ pub fn database<P>(path: P) -> Result<Database, Box<dyn Error>>
 where
     P: AsRef<Path>,
 {
-    let keyspace = Config::new(path).open()?;
-    let database = Database::new(keyspace);
-
-    Ok(database)
+    Ok(Config::new(path).open().map(Database::new)?)
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -98,13 +95,11 @@ pub struct Partitions {
 }
 
 pub fn partitions(database: &Database) -> Result<Partitions, Box<dyn Error>> {
-    let data = data::partition(database)?;
-    let index = index::partition(database)?;
-    let reference = reference::partition(database)?;
-
-    let partitions = Partitions::new(data, index, reference);
-
-    Ok(partitions)
+    Ok(Partitions::new(
+        data::partition(database)?,
+        index::partition(database)?,
+        reference::partition(database)?,
+    ))
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -114,38 +109,32 @@ pub fn partitions(database: &Database) -> Result<Partitions, Box<dyn Error>> {
 pub fn insert(ctx: &mut WriteContext<'_>, position: Position, event: Event) {
     let event = event.into();
 
-    // self.data.insert(batch, position, &event);
-    // self.index.insert(batch, position, &event);
-
     data::insert(ctx, position, &event);
     index::insert(ctx, position, &event);
     reference::insert(ctx, &event);
-
-    // self.reference.insert(batch, position, &event);
 }
 
 // -------------------------------------------------------------------------------------------------
 
 // Hashed Event
 
-#[derive(Debug)]
+#[derive(new, Debug)]
+#[new(vis())]
 pub struct HashedEvent {
+    #[new(into)]
     data: Vec<u8>,
+    #[new(into)]
     descriptor: HashedDescriptor,
     tags: Vec<HashedTag>,
 }
 
 impl From<Event> for HashedEvent {
-    fn from(value: Event) -> Self {
-        let data = value.data;
-        let descriptor = value.descriptor.into();
-        let tags = value.tags.into_iter().map(Into::into).collect();
-
-        Self {
-            data,
-            descriptor,
-            tags,
-        }
+    fn from(event: Event) -> Self {
+        Self::new(
+            event.data,
+            event.descriptor,
+            event.tags.into_iter().map(Into::into).collect(),
+        )
     }
 }
 
@@ -155,7 +144,8 @@ impl From<Event> for HashedEvent {
 
 // Descriptor
 
-#[derive(Clone, Debug)]
+#[derive(new, Debug)]
+#[new(vis())]
 pub struct HashedDescriptor(u64, Descriptor);
 
 impl HashedDescriptor {
@@ -171,17 +161,18 @@ impl AsRef<Descriptor> for HashedDescriptor {
 }
 
 impl From<Descriptor> for HashedDescriptor {
-    fn from(value: Descriptor) -> Self {
-        let bytes = value.identifier().value().as_bytes();
-        let hash = v3::rapidhash_v3_seeded(bytes, &SEED);
-
-        Self(hash, value)
+    fn from(descriptor: Descriptor) -> Self {
+        Self::new(
+            v3::rapidhash_v3_seeded(descriptor.identifier().value().as_bytes(), &SEED),
+            descriptor,
+        )
     }
 }
 
 // Specifier
 
-#[derive(Clone, Debug)]
+#[derive(new, Clone, Debug)]
+#[new(vis())]
 pub struct HashedDescriptorSpecifier(u64, DescriptorSpecifier);
 
 impl HashedDescriptorSpecifier {
@@ -197,11 +188,11 @@ impl AsRef<DescriptorSpecifier> for HashedDescriptorSpecifier {
 }
 
 impl From<DescriptorSpecifier> for HashedDescriptorSpecifier {
-    fn from(value: DescriptorSpecifier) -> Self {
-        let bytes = value.identifier().value().as_bytes();
-        let hash = v3::rapidhash_v3_seeded(bytes, &SEED);
-
-        Self(hash, value)
+    fn from(descriptor_specifier: DescriptorSpecifier) -> Self {
+        Self::new(
+            v3::rapidhash_v3_seeded(descriptor_specifier.identifier().value().as_bytes(), &SEED),
+            descriptor_specifier,
+        )
     }
 }
 
@@ -211,7 +202,8 @@ impl From<DescriptorSpecifier> for HashedDescriptorSpecifier {
 
 // Tag
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(new, Debug)]
+#[new(vis())]
 pub struct HashedTag(u64, Tag);
 
 impl HashedTag {
@@ -227,10 +219,7 @@ impl AsRef<Tag> for HashedTag {
 }
 
 impl From<Tag> for HashedTag {
-    fn from(value: Tag) -> Self {
-        let bytes = value.value().as_bytes();
-        let hash = v3::rapidhash_v3_seeded(bytes, &SEED);
-
-        Self(hash, value)
+    fn from(tag: Tag) -> Self {
+        Self::new(v3::rapidhash_v3_seeded(tag.value().as_bytes(), &SEED), tag)
     }
 }
