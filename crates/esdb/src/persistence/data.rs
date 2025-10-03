@@ -68,7 +68,7 @@ fn insert_event(ctx: &mut WriteContext<'_>, position: Position, event: &HashedEv
 }
 
 fn write_event_value(value: &mut Vec<u8>, event: &HashedEvent) {
-    let descriptor_identifier = event.descriptor.hash();
+    let descriptor_identifier = event.descriptor.identifer().hash();
     let descriptor_version = event.descriptor.version().value();
     let tags_len = u8::try_from(event.tags.len()).expect("max tag count exceeded");
 

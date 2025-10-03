@@ -4,7 +4,10 @@ pub mod reference;
 
 use std::{
     error::Error,
-    ops::Deref,
+    ops::{
+        Deref,
+        Range,
+    },
     path::Path,
 };
 
@@ -23,7 +26,9 @@ use rapidhash::v3::{
 
 use crate::model::{
     Descriptor,
+    DescriptorIdentifier,
     DescriptorSpecifier,
+    DescriptorVersion,
     Event,
     Position,
     Tag,
@@ -147,57 +152,80 @@ impl From<Event> for HashedEvent {
 
 #[derive(new, Debug)]
 #[new(vis())]
-pub struct HashedDescriptor(u64, Descriptor);
+pub struct HashedDescriptor(HashedDescriptorIdentifier, DescriptorVersion);
 
 impl HashedDescriptor {
-    fn hash(&self) -> u64 {
-        self.0
+    fn identifer(&self) -> &HashedDescriptorIdentifier {
+        &self.0
     }
-}
 
-impl Deref for HashedDescriptor {
-    type Target = Descriptor;
-
-    fn deref(&self) -> &Self::Target {
+    fn version(&self) -> &DescriptorVersion {
         &self.1
     }
 }
 
 impl From<Descriptor> for HashedDescriptor {
     fn from(descriptor: Descriptor) -> Self {
-        Self::new(
-            v3::rapidhash_v3_seeded(descriptor.identifier().value().as_bytes(), &SEED),
-            descriptor,
-        )
+        let descriptor = descriptor.take();
+        let identifier = descriptor.0.into();
+        let version = descriptor.1;
+
+        Self::new(identifier, version)
     }
 }
 
-// Specifier
+// Identifier
 
-#[derive(new, Clone, Debug)]
+#[derive(new, Debug)]
 #[new(vis())]
-pub struct HashedDescriptorSpecifier(u64, DescriptorSpecifier);
+pub struct HashedDescriptorIdentifier(u64, DescriptorIdentifier);
 
-impl HashedDescriptorSpecifier {
+impl HashedDescriptorIdentifier {
     fn hash(&self) -> u64 {
         self.0
     }
 }
 
-impl Deref for HashedDescriptorSpecifier {
-    type Target = DescriptorSpecifier;
+impl Deref for HashedDescriptorIdentifier {
+    type Target = DescriptorIdentifier;
 
     fn deref(&self) -> &Self::Target {
         &self.1
     }
 }
 
+impl From<DescriptorIdentifier> for HashedDescriptorIdentifier {
+    fn from(descriptor_identifier: DescriptorIdentifier) -> Self {
+        Self::new(
+            v3::rapidhash_v3_seeded(descriptor_identifier.value().as_bytes(), &SEED),
+            descriptor_identifier,
+        )
+    }
+}
+
+// Specifier
+
+#[derive(new, Debug)]
+#[new(vis())]
+pub struct HashedDescriptorSpecifier(HashedDescriptorIdentifier, Option<Range<DescriptorVersion>>);
+
+impl HashedDescriptorSpecifier {
+    fn identifer(&self) -> &HashedDescriptorIdentifier {
+        &self.0
+    }
+
+    fn range(&self) -> Option<&Range<DescriptorVersion>> {
+        self.1.as_ref()
+    }
+}
+
 impl From<DescriptorSpecifier> for HashedDescriptorSpecifier {
     fn from(descriptor_specifier: DescriptorSpecifier) -> Self {
-        Self::new(
-            v3::rapidhash_v3_seeded(descriptor_specifier.identifier().value().as_bytes(), &SEED),
-            descriptor_specifier,
-        )
+        let descriptor_specifier = descriptor_specifier.take();
+        let identifier = descriptor_specifier.0.into();
+        let range = descriptor_specifier.1;
+
+        Self::new(identifier, range)
     }
 }
 

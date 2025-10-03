@@ -1,9 +1,13 @@
 use std::error::Error;
 
-use bytes::BufMut as _;
+use bytes::{
+    Buf as _,
+    BufMut as _,
+};
 use fjall::{
     PartitionCreateOptions,
     PartitionHandle,
+    Slice,
 };
 
 use crate::{
@@ -11,9 +15,12 @@ use crate::{
     persistence::{
         Database,
         HashedDescriptor,
+        HashedDescriptorIdentifier,
+        HashedDescriptorSpecifier,
         HashedEvent,
         HashedTag,
         POSITION_LEN,
+        ReadContext,
         WriteContext,
     },
 };
@@ -62,8 +69,7 @@ fn insert_descriptor(
 
 static DESCRIPTOR_FORWARD_INDEX_ID: u8 = 0;
 static DESCRIPTOR_FORWARD_INDEX_KEY_LEN: usize = ID_LEN + DESCRIPTOR_HASH_LEN + POSITION_LEN;
-// static DESCRIPTOR_FORWARD_INDEX_PREFIX_LEN: usize = ID_LEN +
-// DESCRIPTOR_HASH_LEN;
+static DESCRIPTOR_FORWARD_INDEX_PREFIX_LEN: usize = ID_LEN + DESCRIPTOR_HASH_LEN;
 
 // Descriptor Forward Insertion
 
@@ -73,27 +79,122 @@ fn insert_descriptor_forward(
     descriptor: &HashedDescriptor,
 ) {
     let mut key = [0u8; DESCRIPTOR_FORWARD_INDEX_KEY_LEN];
-    let value = descriptor.version().value().to_be_bytes();
 
-    write_descriptor_forward_key(&mut key, position, descriptor);
+    let identifier = descriptor.identifer();
+
+    write_descriptor_forward_key(&mut key, position, identifier);
+
+    let value = descriptor.version().value().to_be_bytes();
 
     ctx.batch.insert(&ctx.partitions.index, key, value);
 }
 
+// Descriptor Forward Iteration
+
+fn iterate_descriptor_forward(
+    ctx: &ReadContext<'_>,
+    position: Option<Position>,
+    specifier: &HashedDescriptorSpecifier,
+) -> impl Iterator<Item = u64> {
+    let iterator = match position {
+        Some(position) => iterate_descriptor_forward_range(ctx, position, specifier),
+        None => iterate_descriptor_forward_prefix(ctx, specifier),
+    };
+
+    let version_range = specifier.range();
+    let version_bounds = version_range
+        .as_ref()
+        .map_or((u8::MIN, u8::MAX), |r| (r.start.value(), r.end.value()));
+
+    let version_min = version_bounds.0;
+    let version_max = version_bounds.1;
+    let version_filter = version_min > u8::MIN || version_max < u8::MAX;
+
+    iterator.filter_map(move |kv| {
+        let (k, v) = kv.expect("invalid key/value during iteration");
+
+        if version_filter {
+            let mut v = &v[..];
+
+            let version = v.get_u8();
+
+            if !(version_min..version_max).contains(&version) {
+                return None;
+            }
+        }
+
+        let mut k = &k[..];
+
+        k.advance(ID_LEN + DESCRIPTOR_HASH_LEN);
+
+        let position = k.get_u64();
+
+        Some(position)
+    })
+}
+
+fn iterate_descriptor_forward_prefix(
+    ctx: &ReadContext<'_>,
+    specifier: &HashedDescriptorSpecifier,
+) -> Box<dyn Iterator<Item = Result<(Slice, Slice), fjall::Error>>> {
+    let mut prefix = [0u8; DESCRIPTOR_FORWARD_INDEX_PREFIX_LEN];
+
+    let identifier = specifier.identifer();
+
+    write_descriptor_forward_prefix(&mut prefix, identifier);
+
+    Box::new(ctx.partitions.index.prefix(prefix))
+}
+
+fn iterate_descriptor_forward_range(
+    ctx: &ReadContext<'_>,
+    position: Position,
+    specifier: &HashedDescriptorSpecifier,
+) -> Box<dyn Iterator<Item = Result<(Slice, Slice), fjall::Error>>> {
+    let mut lower = [0u8; DESCRIPTOR_FORWARD_INDEX_KEY_LEN];
+
+    let identifier = specifier.identifer();
+
+    write_descriptor_forward_key(&mut lower, position, identifier);
+
+    let mut upper = [0u8; DESCRIPTOR_FORWARD_INDEX_KEY_LEN];
+
+    let position = Position::from(u64::MAX);
+
+    write_descriptor_forward_key(&mut upper, position, identifier);
+
+    Box::new(ctx.partitions.index.range(lower..upper))
+}
+
+// Keys/Prefixes
+
 fn write_descriptor_forward_key(
     key: &mut [u8; DESCRIPTOR_FORWARD_INDEX_KEY_LEN],
     position: Position,
-    descriptor: &HashedDescriptor,
+    descriptor_identifier: &HashedDescriptorIdentifier,
 ) {
     let mut key = &mut key[..];
 
     let index_id = DESCRIPTOR_FORWARD_INDEX_ID;
-    let descriptor_identifier = descriptor.hash();
+    let identifier = descriptor_identifier.hash();
     let position = position.value();
 
     key.put_u8(index_id);
-    key.put_u64(descriptor_identifier);
+    key.put_u64(identifier);
     key.put_u64(position);
+}
+
+fn write_descriptor_forward_prefix(
+    prefix: &mut [u8; DESCRIPTOR_FORWARD_INDEX_PREFIX_LEN],
+    descriptor_identifier: &HashedDescriptorIdentifier,
+) {
+    let mut prefix = &mut prefix[..];
+
+    let index_id = DESCRIPTOR_FORWARD_INDEX_ID;
+    let identifier = descriptor_identifier.hash();
+
+    prefix.put_u8(index_id);
+    prefix.put_u64(identifier);
 }
 
 // #[must_use]
@@ -159,19 +260,6 @@ fn write_descriptor_forward_key(
 //     }
 // }
 
-// fn get_descriptor_forward_prefix(
-//     prefix: &mut [u8; DESCRIPTOR_FORWARD_INDEX_PREFIX_LEN],
-//     specifier: &HashedDescriptorSpecifier,
-// ) {
-//     let mut prefix = &mut prefix[..];
-
-//     let index_id = DESCRIPTOR_FORWARD_INDEX_ID;
-//     let descriptor_identifier = specifier.hash();
-
-//     prefix.put_u8(index_id);
-//     prefix.put_u64(descriptor_identifier);
-// }
-
 // // Iterator
 
 // #[derive(Debug)]
@@ -224,6 +312,8 @@ fn insert_tag_forward(ctx: &mut WriteContext<'_>, position: Position, tags: &[Ha
         ctx.batch.insert(&ctx.partitions.index, key, []);
     }
 }
+
+// Keys/Prefixes
 
 fn write_tag_forward_key(
     key: &mut [u8; TAG_FORWARD_INDEX_KEY_LEN],

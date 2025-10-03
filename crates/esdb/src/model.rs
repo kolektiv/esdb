@@ -139,6 +139,10 @@ impl Descriptor {
     pub fn version(&self) -> &DescriptorVersion {
         &self.1
     }
+
+    pub fn take(self) -> (DescriptorIdentifier, DescriptorVersion) {
+        (self.0, self.1)
+    }
 }
 
 impl<T, U> From<(T, U)> for Descriptor
@@ -188,6 +192,10 @@ impl DescriptorSpecifier {
 
     pub fn range(&self) -> Option<&Range<DescriptorVersion>> {
         self.1.as_ref()
+    }
+
+    pub fn take(self) -> (DescriptorIdentifier, Option<Range<DescriptorVersion>>) {
+        (self.0, self.1)
     }
 }
 
