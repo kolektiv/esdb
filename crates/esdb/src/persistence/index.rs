@@ -73,7 +73,7 @@ fn insert_descriptor_forward(
     descriptor: &HashedDescriptor,
 ) {
     let mut key = [0u8; DESCRIPTOR_FORWARD_INDEX_KEY_LEN];
-    let value = descriptor.as_ref().version().value().to_be_bytes();
+    let value = descriptor.version().value().to_be_bytes();
 
     write_descriptor_forward_key(&mut key, position, descriptor);
 

@@ -4,6 +4,7 @@ pub mod reference;
 
 use std::{
     error::Error,
+    ops::Deref,
     path::Path,
 };
 
@@ -154,8 +155,10 @@ impl HashedDescriptor {
     }
 }
 
-impl AsRef<Descriptor> for HashedDescriptor {
-    fn as_ref(&self) -> &Descriptor {
+impl Deref for HashedDescriptor {
+    type Target = Descriptor;
+
+    fn deref(&self) -> &Self::Target {
         &self.1
     }
 }
@@ -181,8 +184,10 @@ impl HashedDescriptorSpecifier {
     }
 }
 
-impl AsRef<DescriptorSpecifier> for HashedDescriptorSpecifier {
-    fn as_ref(&self) -> &DescriptorSpecifier {
+impl Deref for HashedDescriptorSpecifier {
+    type Target = DescriptorSpecifier;
+
+    fn deref(&self) -> &Self::Target {
         &self.1
     }
 }
@@ -212,8 +217,10 @@ impl HashedTag {
     }
 }
 
-impl AsRef<Tag> for HashedTag {
-    fn as_ref(&self) -> &Tag {
+impl Deref for HashedTag {
+    type Target = Tag;
+
+    fn deref(&self) -> &Self::Target {
         &self.1
     }
 }
