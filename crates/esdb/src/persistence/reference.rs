@@ -1,6 +1,5 @@
 use std::error::Error;
 
-use bytes::BufMut;
 use fjall::{
     PartitionCreateOptions,
     PartitionHandle,
@@ -8,10 +7,8 @@ use fjall::{
 
 use crate::persistence::{
     Database,
-    HashedDescriptor,
     HashedEvent,
-    HashedTag,
-    WriteContext,
+    Write,
 };
 
 // =================================================================================================
@@ -19,98 +16,143 @@ use crate::persistence::{
 // =================================================================================================
 
 static ID_LEN: usize = size_of::<u8>();
-static REFERENCE_PARTITION_NAME: &str = "reference";
+static PARTITION_NAME: &str = "reference";
 
 // Partition
 
 pub fn partition(database: &Database) -> Result<PartitionHandle, Box<dyn Error>> {
     Ok(database
         .as_ref()
-        .open_partition(REFERENCE_PARTITION_NAME, PartitionCreateOptions::default())?)
+        .open_partition(PARTITION_NAME, PartitionCreateOptions::default())?)
 }
 
-// Partition Insertion
+// Insertion
 
-pub fn insert(ctx: &mut WriteContext<'_>, event: &HashedEvent) {
-    insert_descriptor(ctx, &event.descriptor);
-    insert_tags(ctx, &event.tags);
+pub fn insert(write: &mut Write<'_>, event: &HashedEvent) {
+    descriptor::insert(write, &event.descriptor);
+    tags::insert(write, &event.tags);
 }
 
 // -------------------------------------------------------------------------------------------------
 
 // Descriptor
 
-static DESCRIPTOR_HASH_LEN: usize = size_of::<u64>();
+mod descriptor {
+    use crate::persistence::{
+        HashedDescriptor,
+        Write,
+    };
 
-// Descriptor Insertion
+    static HASH_LEN: usize = size_of::<u64>();
 
-fn insert_descriptor(ctx: &mut WriteContext<'_>, descriptor: &HashedDescriptor) {
-    insert_descriptor_lookup(ctx, descriptor);
-}
+    // Insertion
 
-// Lookup
+    pub fn insert(write: &mut Write<'_>, descriptor: &HashedDescriptor) {
+        lookup::insert(write, descriptor);
+    }
 
-static DESCRIPTOR_LOOKUP_REFERENCE_ID: u8 = 0;
-static DESCRIPTOR_LOOKUP_REFERENCE_KEY_LEN: usize = ID_LEN + DESCRIPTOR_HASH_LEN;
+    // Lookup Reference
 
-fn insert_descriptor_lookup(ctx: &mut WriteContext<'_>, descriptor: &HashedDescriptor) {
-    let mut key = [0u8; DESCRIPTOR_LOOKUP_REFERENCE_KEY_LEN];
+    mod lookup {
+        use bytes::BufMut as _;
 
-    let value = descriptor.identifer().value().as_bytes();
+        use crate::persistence::{
+            HashedDescriptor,
+            Write,
+            reference::{
+                ID_LEN,
+                descriptor::HASH_LEN,
+            },
+        };
 
-    write_descriptor_lookup_key(&mut key, descriptor);
+        static REFERENCE_ID: u8 = 0;
+        static KEY_LEN: usize = ID_LEN + HASH_LEN;
 
-    ctx.batch.insert(&ctx.partitions.reference, key, value);
-}
+        // Insertion
 
-fn write_descriptor_lookup_key(
-    key: &mut [u8; DESCRIPTOR_LOOKUP_REFERENCE_KEY_LEN],
-    descriptor: &HashedDescriptor,
-) {
-    let mut key = &mut key[..];
+        pub fn insert(write: &mut Write<'_>, descriptor: &HashedDescriptor) {
+            let mut key = [0u8; KEY_LEN];
 
-    let reference_id = DESCRIPTOR_LOOKUP_REFERENCE_ID;
-    let descriptor_identifier = descriptor.identifer().hash();
+            write_key(&mut key, descriptor);
 
-    key.put_u8(reference_id);
-    key.put_u64(descriptor_identifier);
+            let value = descriptor.identifer().value().as_bytes();
+
+            write.batch.insert(&write.partitions.reference, key, value);
+        }
+
+        // Keys/Prefixes
+
+        fn write_key(key: &mut [u8; KEY_LEN], descriptor: &HashedDescriptor) {
+            let mut key = &mut key[..];
+
+            let reference_id = REFERENCE_ID;
+            let descriptor_identifier = descriptor.identifer().hash();
+
+            key.put_u8(reference_id);
+            key.put_u64(descriptor_identifier);
+        }
+    }
 }
 
 // -------------------------------------------------------------------------------------------------
 
-// Tag
+// Tags
 
-static TAG_HASH_LEN: usize = size_of::<u64>();
+mod tags {
+    use crate::persistence::{
+        HashedTag,
+        Write,
+    };
 
-// Tag Insertion
+    static HASH_LEN: usize = size_of::<u64>();
 
-fn insert_tags(ctx: &mut WriteContext<'_>, tags: &[HashedTag]) {
-    insert_tags_lookup(ctx, tags);
-}
+    // Insertion
 
-// Lookup
-
-static TAG_LOOKUP_REFERENCE_ID: u8 = 1;
-static TAG_LOOKUP_REFERENCE_KEY_LEN: usize = ID_LEN + TAG_HASH_LEN;
-
-fn insert_tags_lookup(ctx: &mut WriteContext<'_>, tags: &[HashedTag]) {
-    let mut key = [0u8; TAG_LOOKUP_REFERENCE_KEY_LEN];
-
-    for tag in tags {
-        write_tag_lookup_key(&mut key, tag);
-
-        let value = tag.value().as_bytes();
-
-        ctx.batch.insert(&ctx.partitions.reference, key, value);
+    pub fn insert(write: &mut Write<'_>, tags: &[HashedTag]) {
+        lookup::insert(write, tags);
     }
-}
 
-fn write_tag_lookup_key(key: &mut [u8; TAG_LOOKUP_REFERENCE_KEY_LEN], tag: &HashedTag) {
-    let mut key = &mut key[..];
+    // Lookup Reference
 
-    let reference_id = TAG_LOOKUP_REFERENCE_ID;
-    let tag = tag.hash();
+    mod lookup {
+        use bytes::BufMut as _;
 
-    key.put_u8(reference_id);
-    key.put_u64(tag);
+        use crate::persistence::{
+            HashedTag,
+            Write,
+            reference::{
+                ID_LEN,
+                tags::HASH_LEN,
+            },
+        };
+
+        static REFERENCE_ID: u8 = 1;
+        static KEY_LEN: usize = ID_LEN + HASH_LEN;
+
+        // Insertion
+
+        pub fn insert(write: &mut Write<'_>, tags: &[HashedTag]) {
+            let mut key = [0u8; KEY_LEN];
+
+            for tag in tags {
+                write_key(&mut key, tag);
+
+                let value = tag.value().as_bytes();
+
+                write.batch.insert(&write.partitions.reference, key, value);
+            }
+        }
+
+        // Keys/Prefixes
+
+        fn write_key(key: &mut [u8; KEY_LEN], tag: &HashedTag) {
+            let mut key = &mut key[..];
+
+            let reference_id = REFERENCE_ID;
+            let tag = tag.hash();
+
+            key.put_u8(reference_id);
+            key.put_u64(tag);
+        }
+    }
 }

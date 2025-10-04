@@ -10,7 +10,7 @@ use crate::{
     persistence::{
         Database,
         HashedEvent,
-        WriteContext,
+        Write,
     },
 };
 
@@ -31,9 +31,9 @@ pub fn partition(database: &Database) -> Result<PartitionHandle, Box<dyn Error>>
 
 // Partition Insertion
 
-pub fn insert(ctx: &mut WriteContext<'_>, position: Position, event: &HashedEvent) {
-    descriptor::insert(ctx, position, &event.descriptor);
-    tags::insert(ctx, position, &event.tags);
+pub fn insert(write: &mut Write<'_>, position: Position, event: &HashedEvent) {
+    descriptor::insert(write, position, &event.descriptor);
+    tags::insert(write, position, &event.tags);
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -45,7 +45,7 @@ mod descriptor {
         model::Position,
         persistence::{
             HashedDescriptor,
-            WriteContext,
+            Write,
         },
     };
 
@@ -53,8 +53,8 @@ mod descriptor {
 
     //  Insertion
 
-    pub fn insert(ctx: &mut WriteContext<'_>, position: Position, descriptor: &HashedDescriptor) {
-        forward::insert(ctx, position, descriptor);
+    pub fn insert(write: &mut Write<'_>, position: Position, descriptor: &HashedDescriptor) {
+        forward::insert(write, position, descriptor);
     }
 
     // Forward Index
@@ -73,11 +73,11 @@ mod descriptor {
             model::Position,
             persistence::{
                 HashedDescriptor,
-                HashedDescriptorIdentifier,
-                HashedDescriptorSpecifier,
+                HashedIdentifier,
+                HashedSpecifier,
                 POSITION_LEN,
-                ReadContext,
-                WriteContext,
+                Read,
+                Write,
                 index::{
                     ID_LEN,
                     descriptor::HASH_LEN,
@@ -91,11 +91,7 @@ mod descriptor {
 
         //  Insertion
 
-        pub fn insert(
-            ctx: &mut WriteContext<'_>,
-            position: Position,
-            descriptor: &HashedDescriptor,
-        ) {
+        pub fn insert(write: &mut Write<'_>, position: Position, descriptor: &HashedDescriptor) {
             let mut key = [0u8; KEY_LEN];
 
             let identifier = descriptor.identifer();
@@ -104,19 +100,19 @@ mod descriptor {
 
             let value = descriptor.version().value().to_be_bytes();
 
-            ctx.batch.insert(&ctx.partitions.index, key, value);
+            write.batch.insert(&write.partitions.index, key, value);
         }
 
         // Iteration
 
         pub fn iterate(
-            ctx: &ReadContext<'_>,
+            read: &Read<'_>,
             position: Option<Position>,
-            specifier: &HashedDescriptorSpecifier,
+            specifier: &HashedSpecifier,
         ) -> impl Iterator<Item = u64> {
             let iterator = match position {
-                Some(position) => iterate_range(ctx, position, specifier),
-                None => iterate_prefix(ctx, specifier),
+                Some(position) => iterate_range(read, position, specifier),
+                None => iterate_prefix(read, specifier),
             };
 
             let version_range = specifier.range();
@@ -128,32 +124,32 @@ mod descriptor {
             let version_max = version_bounds.1;
             let version_filter = version_min > u8::MIN || version_max < u8::MAX;
 
-            iterator.filter_map(move |kv| {
-                let (k, v) = kv.expect("invalid key/value during iteration");
+            iterator.filter_map(move |key_value| {
+                let (key, value) = key_value.expect("invalid key/value during iteration");
 
                 if version_filter {
-                    let mut v = &v[..];
+                    let mut value = &value[..];
 
-                    let version = v.get_u8();
+                    let version = value.get_u8();
 
                     if !(version_min..version_max).contains(&version) {
                         return None;
                     }
                 }
 
-                let mut k = &k[..];
+                let mut key = &key[..];
 
-                k.advance(ID_LEN + HASH_LEN);
+                key.advance(ID_LEN + HASH_LEN);
 
-                let position = k.get_u64();
+                let position = key.get_u64();
 
                 Some(position)
             })
         }
 
         fn iterate_prefix(
-            ctx: &ReadContext<'_>,
-            specifier: &HashedDescriptorSpecifier,
+            read: &Read<'_>,
+            specifier: &HashedSpecifier,
         ) -> Box<dyn Iterator<Item = Result<(Slice, Slice), Error>>> {
             let mut prefix = [0u8; PREFIX_LEN];
 
@@ -161,13 +157,13 @@ mod descriptor {
 
             write_prefix(&mut prefix, identifier);
 
-            Box::new(ctx.partitions.index.prefix(prefix))
+            Box::new(read.partitions.index.prefix(prefix))
         }
 
         fn iterate_range(
-            ctx: &ReadContext<'_>,
+            read: &Read<'_>,
             position: Position,
-            specifier: &HashedDescriptorSpecifier,
+            specifier: &HashedSpecifier,
         ) -> Box<dyn Iterator<Item = Result<(Slice, Slice), Error>>> {
             let mut lower = [0u8; KEY_LEN];
             let mut upper = [0u8; KEY_LEN];
@@ -180,16 +176,12 @@ mod descriptor {
 
             write_key(&mut upper, position, identifier);
 
-            Box::new(ctx.partitions.index.range(lower..=upper))
+            Box::new(read.partitions.index.range(lower..=upper))
         }
 
         // Keys/Prefixes
 
-        fn write_key(
-            key: &mut [u8; KEY_LEN],
-            position: Position,
-            identifier: &HashedDescriptorIdentifier,
-        ) {
+        fn write_key(key: &mut [u8; KEY_LEN], position: Position, identifier: &HashedIdentifier) {
             let mut key = &mut key[..];
 
             let index_id = INDEX_ID;
@@ -201,7 +193,7 @@ mod descriptor {
             key.put_u64(position);
         }
 
-        fn write_prefix(prefix: &mut [u8; PREFIX_LEN], identifier: &HashedDescriptorIdentifier) {
+        fn write_prefix(prefix: &mut [u8; PREFIX_LEN], identifier: &HashedIdentifier) {
             let mut prefix = &mut prefix[..];
 
             let index_id = INDEX_ID;
@@ -213,101 +205,16 @@ mod descriptor {
     }
 }
 
-// #[must_use]
-// pub fn view(&self, descriptor: HashedDescriptorSpecifier) ->
-// DescriptorForwardIndexView {     DescriptorForwardIndexView::new(self.index.
-// clone(), descriptor) }
-
-// // View
-// #[derive(Debug)]
-// pub struct DescriptorForwardIndexView {
-//     #[debug("PartitionHandle(\"{}\")", index.name)]
-//     index: PartitionHandle,
-//     specifier: HashedDescriptorSpecifier,
-// }
-
-// impl DescriptorForwardIndexView {
-//     fn new(index: PartitionHandle, specifier: HashedDescriptorSpecifier) ->
-// Self {         Self { index, specifier }
-//     }
-// }
-
-// impl IntoIterator for DescriptorForwardIndexView {
-//     type IntoIter = DescriptorForwardIndexIterator;
-//     type Item = u64;
-
-//     fn into_iter(self) -> Self::IntoIter {
-//         let mut prefix = [0u8; DESCRIPTOR_FORWARD_INDEX_PREFIX_LEN];
-
-//         get_descriptor_forward_prefix(&mut prefix, &self.specifier);
-
-//         let version_range = self.specifier.as_ref().range();
-//         let version_bounds = version_range
-//             .as_ref()
-//             .map_or((u8::MIN, u8::MAX), |r| (r.start.value(),
-// r.end.value()));
-
-//         let version_min = version_bounds.0;
-//         let version_max = version_bounds.1;
-//         let version_filter = version_min > u8::MIN || version_max < u8::MAX;
-
-//         let iterator = Box::new(self.index.prefix(prefix).filter_map(move
-// |kv| {             let (k, v) = kv.expect("invalid key/value during
-// iteration");
-
-//             if version_filter {
-//                 let version = v.as_ref().get_u8();
-
-//                 if !(version_min..version_max).contains(&version) {
-//                     return None;
-//                 }
-//             }
-
-//             let mut k = &k[..];
-
-//             k.advance(ID_LEN + DESCRIPTOR_HASH_LEN);
-
-//             let position = k.get_u64();
-
-//             Some(position)
-//         }));
-
-//         DescriptorForwardIndexIterator::new(iterator)
-//     }
-// }
-
-// // Iterator
-
-// #[derive(Debug)]
-// pub struct DescriptorForwardIndexIterator {
-//     #[debug(skip)]
-//     iterator: Box<dyn Iterator<Item = u64>>,
-// }
-
-// impl DescriptorForwardIndexIterator {
-//     fn new(iterator: Box<dyn Iterator<Item = u64>>) -> Self {
-//         Self { iterator }
-//     }
-// }
-
-// impl Iterator for DescriptorForwardIndexIterator {
-//     type Item = u64;
-
-//     fn next(&mut self) -> Option<Self::Item> {
-//         self.iterator.next()
-//     }
-// }
-
 // -------------------------------------------------------------------------------------------------
 
-// Tag
+// Tags
 
 mod tags {
     use crate::{
         model::Position,
         persistence::{
             HashedTag,
-            WriteContext,
+            Write,
         },
     };
 
@@ -315,8 +222,8 @@ mod tags {
 
     // Insertion
 
-    pub fn insert(ctx: &mut WriteContext<'_>, position: Position, tags: &[HashedTag]) {
-        forward::insert(ctx, position, tags);
+    pub fn insert(write: &mut Write<'_>, position: Position, tags: &[HashedTag]) {
+        forward::insert(write, position, tags);
     }
 
     // Forward Index
@@ -329,7 +236,7 @@ mod tags {
             persistence::{
                 HashedTag,
                 POSITION_LEN,
-                WriteContext,
+                Write,
                 index::{
                     ID_LEN,
                     tags::HASH_LEN,
@@ -342,13 +249,13 @@ mod tags {
 
         // Insertion
 
-        pub fn insert(ctx: &mut WriteContext<'_>, position: Position, tags: &[HashedTag]) {
+        pub fn insert(write: &mut Write<'_>, position: Position, tags: &[HashedTag]) {
             let mut key = [0u8; KEY_LEN];
 
             for tag in tags {
                 write_key(&mut key, position, tag);
 
-                ctx.batch.insert(&ctx.partitions.index, key, []);
+                write.batch.insert(&write.partitions.index, key, []);
             }
         }
 

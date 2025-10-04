@@ -26,12 +26,12 @@ use rapidhash::v3::{
 
 use crate::model::{
     Descriptor,
-    DescriptorIdentifier,
-    DescriptorSpecifier,
-    DescriptorVersion,
     Event,
+    Identifier,
     Position,
+    Specifier,
     Tag,
+    Version,
 };
 
 // =================================================================================================
@@ -49,13 +49,13 @@ static SEED: RapidSecrets = RapidSecrets::seed(0x2811_2017);
 
 #[derive(new, Debug)]
 #[new(vis(pub(crate)))]
-pub struct ReadContext<'a> {
+pub struct Read<'a> {
     partitions: &'a Partitions,
 }
 
 #[derive(new, Debug)]
 #[new(vis(pub(crate)))]
-pub struct WriteContext<'a> {
+pub struct Write<'a> {
     #[debug("Batch")]
     batch: &'a mut Batch,
     partitions: &'a Partitions,
@@ -112,12 +112,12 @@ pub fn partitions(database: &Database) -> Result<Partitions, Box<dyn Error>> {
 
 // Insertion
 
-pub fn insert(ctx: &mut WriteContext<'_>, position: Position, event: Event) {
+pub fn insert(write: &mut Write<'_>, position: Position, event: Event) {
     let event = event.into();
 
-    data::insert(ctx, position, &event);
-    index::insert(ctx, position, &event);
-    reference::insert(ctx, &event);
+    data::insert(write, position, &event);
+    index::insert(write, position, &event);
+    reference::insert(write, &event);
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -152,14 +152,14 @@ impl From<Event> for HashedEvent {
 
 #[derive(new, Debug)]
 #[new(vis())]
-pub struct HashedDescriptor(HashedDescriptorIdentifier, DescriptorVersion);
+pub struct HashedDescriptor(HashedIdentifier, Version);
 
 impl HashedDescriptor {
-    fn identifer(&self) -> &HashedDescriptorIdentifier {
+    fn identifer(&self) -> &HashedIdentifier {
         &self.0
     }
 
-    fn version(&self) -> &DescriptorVersion {
+    fn version(&self) -> &Version {
         &self.1
     }
 }
@@ -178,24 +178,24 @@ impl From<Descriptor> for HashedDescriptor {
 
 #[derive(new, Debug)]
 #[new(vis())]
-pub struct HashedDescriptorIdentifier(u64, DescriptorIdentifier);
+pub struct HashedIdentifier(u64, Identifier);
 
-impl HashedDescriptorIdentifier {
+impl HashedIdentifier {
     fn hash(&self) -> u64 {
         self.0
     }
 }
 
-impl Deref for HashedDescriptorIdentifier {
-    type Target = DescriptorIdentifier;
+impl Deref for HashedIdentifier {
+    type Target = Identifier;
 
     fn deref(&self) -> &Self::Target {
         &self.1
     }
 }
 
-impl From<DescriptorIdentifier> for HashedDescriptorIdentifier {
-    fn from(descriptor_identifier: DescriptorIdentifier) -> Self {
+impl From<Identifier> for HashedIdentifier {
+    fn from(descriptor_identifier: Identifier) -> Self {
         Self::new(
             v3::rapidhash_v3_seeded(descriptor_identifier.value().as_bytes(), &SEED),
             descriptor_identifier,
@@ -207,20 +207,20 @@ impl From<DescriptorIdentifier> for HashedDescriptorIdentifier {
 
 #[derive(new, Debug)]
 #[new(vis())]
-pub struct HashedDescriptorSpecifier(HashedDescriptorIdentifier, Option<Range<DescriptorVersion>>);
+pub struct HashedSpecifier(HashedIdentifier, Option<Range<Version>>);
 
-impl HashedDescriptorSpecifier {
-    fn identifer(&self) -> &HashedDescriptorIdentifier {
+impl HashedSpecifier {
+    fn identifer(&self) -> &HashedIdentifier {
         &self.0
     }
 
-    fn range(&self) -> Option<&Range<DescriptorVersion>> {
+    fn range(&self) -> Option<&Range<Version>> {
         self.1.as_ref()
     }
 }
 
-impl From<DescriptorSpecifier> for HashedDescriptorSpecifier {
-    fn from(descriptor_specifier: DescriptorSpecifier) -> Self {
+impl From<Specifier> for HashedSpecifier {
+    fn from(descriptor_specifier: Specifier) -> Self {
         let descriptor_specifier = descriptor_specifier.take();
         let identifier = descriptor_specifier.0.into();
         let range = descriptor_specifier.1;

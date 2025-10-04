@@ -11,8 +11,8 @@ use crate::persistence::{
     self,
     Database,
     Partitions,
-    ReadContext,
-    WriteContext,
+    Read,
+    Write,
 };
 
 // =================================================================================================
@@ -51,7 +51,7 @@ impl Stream {
         let database = persistence::database(path)?;
         let partitions = persistence::partitions(&database)?;
 
-        let len = persistence::data::len(&ReadContext::new(&partitions))?;
+        let len = persistence::data::len(&Read::new(&partitions))?;
         let position = len.into();
 
         Ok(Self::new_internal(database, partitions, position))
@@ -66,10 +66,10 @@ impl Stream {
         let mut batch = self.database.as_ref().batch();
 
         {
-            let mut ctx = WriteContext::new(&mut batch, &self.partitions);
+            let mut write = Write::new(&mut batch, &self.partitions);
 
             for event in events {
-                persistence::insert(&mut ctx, self.position, event);
+                persistence::insert(&mut write, self.position, event);
 
                 self.position.increment();
             }
@@ -83,11 +83,11 @@ impl Stream {
 
 impl Stream {
     pub fn is_empty(&self) -> Result<bool, Box<dyn Error>> {
-        persistence::data::is_empty(&ReadContext::new(&self.partitions))
+        persistence::data::is_empty(&Read::new(&self.partitions))
     }
 
     pub fn len(&self) -> Result<u64, Box<dyn Error>> {
-        persistence::data::len(&ReadContext::new(&self.partitions))
+        persistence::data::len(&Read::new(&self.partitions))
     }
 }
 
@@ -126,29 +126,26 @@ where
 
 #[derive(new, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 #[new(vis())]
-pub struct Descriptor(
-    #[new(into)] DescriptorIdentifier,
-    #[new(into)] DescriptorVersion,
-);
+pub struct Descriptor(#[new(into)] Identifier, #[new(into)] Version);
 
 impl Descriptor {
-    pub fn identifier(&self) -> &DescriptorIdentifier {
+    pub fn identifier(&self) -> &Identifier {
         &self.0
     }
 
-    pub fn version(&self) -> &DescriptorVersion {
+    pub fn version(&self) -> &Version {
         &self.1
     }
 
-    pub fn take(self) -> (DescriptorIdentifier, DescriptorVersion) {
+    pub fn take(self) -> (Identifier, Version) {
         (self.0, self.1)
     }
 }
 
 impl<T, U> From<(T, U)> for Descriptor
 where
-    T: Into<DescriptorIdentifier>,
-    U: Into<DescriptorVersion>,
+    T: Into<Identifier>,
+    U: Into<Version>,
 {
     fn from(value: (T, U)) -> Self {
         Self::new(value.0, value.1)
@@ -159,15 +156,15 @@ where
 
 #[derive(new, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 #[new(vis())]
-pub struct DescriptorIdentifier(#[new(into)] String);
+pub struct Identifier(#[new(into)] String);
 
-impl DescriptorIdentifier {
+impl Identifier {
     pub fn value(&self) -> &str {
         &self.0
     }
 }
 
-impl<T> From<T> for DescriptorIdentifier
+impl<T> From<T> for Identifier
 where
     T: Into<String>,
 {
@@ -180,29 +177,26 @@ where
 
 #[derive(new, Clone, Debug, Eq, PartialEq)]
 #[new(vis())]
-pub struct DescriptorSpecifier(
-    #[new(into)] DescriptorIdentifier,
-    #[new(into)] Option<Range<DescriptorVersion>>,
-);
+pub struct Specifier(#[new(into)] Identifier, #[new(into)] Option<Range<Version>>);
 
-impl DescriptorSpecifier {
-    pub fn identifier(&self) -> &DescriptorIdentifier {
+impl Specifier {
+    pub fn identifier(&self) -> &Identifier {
         &self.0
     }
 
-    pub fn range(&self) -> Option<&Range<DescriptorVersion>> {
+    pub fn range(&self) -> Option<&Range<Version>> {
         self.1.as_ref()
     }
 
-    pub fn take(self) -> (DescriptorIdentifier, Option<Range<DescriptorVersion>>) {
+    pub fn take(self) -> (Identifier, Option<Range<Version>>) {
         (self.0, self.1)
     }
 }
 
-impl<T, U> From<(T, U)> for DescriptorSpecifier
+impl<T, U> From<(T, U)> for Specifier
 where
-    T: Into<DescriptorIdentifier>,
-    U: Into<Option<Range<DescriptorVersion>>>,
+    T: Into<Identifier>,
+    U: Into<Option<Range<Version>>>,
 {
     fn from(value: (T, U)) -> Self {
         Self::new(value.0, value.1)
@@ -213,15 +207,15 @@ where
 
 #[derive(new, Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 #[new(vis())]
-pub struct DescriptorVersion(#[new(into)] u8);
+pub struct Version(#[new(into)] u8);
 
-impl DescriptorVersion {
+impl Version {
     pub fn value(self) -> u8 {
         self.0
     }
 }
 
-impl<T> From<T> for DescriptorVersion
+impl<T> From<T> for Version
 where
     T: Into<u8>,
 {
